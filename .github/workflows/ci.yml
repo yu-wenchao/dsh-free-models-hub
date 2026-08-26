@@ -32,35 +32,23 @@ jobs:
             console.log('manifest OK', pkg.name, pkg.version);
           "
 
-  php:
+  install-contract:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/setup-node@v4
         with:
-          php-version: '7.4'
-          extensions: pdo_sqlite
+          node-version: 20
 
-      - name: PHP syntax gate (7.4)
-        run: find server-php -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Pack the distributable tarball
+        run: npm pack
 
-      - name: Backend smoke (clean URLs, front controller)
+      - name: Install it like a user would (offline, zero deps)
         run: |
-          php -S 127.0.0.1:8098 -t server-php server-php/index.php >php-server.log 2>&1 &
-          ok=0
-          for i in $(seq 1 30); do
-            if curl -s -o /dev/null "http://127.0.0.1:8098/api/models"; then ok=1; break; fi
-            sleep 1
-          done
-          if [ "$ok" != "1" ]; then
-            echo "::error::backend server did not start"
-            cat php-server.log
-            exit 1
-          fi
-          curl -fsS "http://127.0.0.1:8098/" | grep -q '免费模型榜'
-          curl -fsS "http://127.0.0.1:8098/api/models?page=1&page_size=10" | grep -q '"ok":true'
-          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8098/includes/config.php")
-          echo "stealth probe /includes/config.php -> $code (expect 404)"
-          test "$code" = "404"
-          echo "Clean-URL smoke OK"
+          mkdir -p /tmp/install-test && cd /tmp/install-test
+          npm init -y
+          npm i "$GITHUB_WORKSPACE"/dsh-free-models-hub-*.tgz --ignore-scripts --no-audit --no-fund
+
+      - name: Installer activation contract (11 checks)
+        run: node scripts/installer-contract.cjs /tmp/install-test/node_modules/dsh-free-models-hub
