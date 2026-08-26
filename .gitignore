@@ -1,0 +1,23 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# ── 私有组件：不随开源仓库发布 ──────────────────────────────
+# server-php 是作者私有运营的后端（免费-api.gd7.cn）。
+# 它只存在于本机，通过 scripts/deploy-site.ps1 部署到自己的服务器。
+# 不上传 GitHub —— 其他站长拿不到后台代码，无法自建数据源。
+server-php/
+
+# PHP runtime artifacts（本地副本保险起见也忽略）
+server-php/data/*.db
+server-php/data/*.db-journal
+
+# local scratch
+/tmp/
+*.local.md
+*.tgz
+
+# local test artifacts
+tmp-*
+*.html.tmp

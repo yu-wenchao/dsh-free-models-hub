@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unit tests (plugin core)
+        run: npm test
+
+      - name: Build artifacts are in sync with src/
+        run: npm run verify
+
+      - name: Package manifest sanity
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            if (!pkg.dsh || !pkg.dsh.bundle || !pkg.dsh.bundle.patch) throw new Error('missing dsh.bundle.patch (plugin would install but never activate)');
+            if (!pkg.dsh || !pkg.dsh.client || pkg.dsh.client.platform !== 'web') throw new Error('missing dsh.client web platform');
+            if (!pkg.exports || !pkg.exports['./client']) throw new Error('missing ./client export');
+            console.log('manifest OK', pkg.name, pkg.version);
+          "
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: pdo_sqlite
+
+      - name: PHP syntax gate (7.4)
+        run: find server-php -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Backend smoke (clean URLs, front controller)
+        run: |
+          php -S 127.0.0.1:8098 -t server-php server-php/index.php >/dev/null 2>&1 &
+          sleep 2
+          curl -fsS "http://127.0.0.1:8098/" | grep -q '免费模型榜'
+          curl -fsS "http://127.0.0.1:8098/api/models?page=1&page_size=10" | grep -q '"ok":true'
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8098/includes/config.php")
+          test "$code" = "404"
+          echo "Clean-URL smoke OK"

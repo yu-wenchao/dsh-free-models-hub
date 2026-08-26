@@ -1,0 +1,80 @@
+/**
+ * dsh-free-models-hub · Host half (Node side of the bundle).
+ *
+ * Deliberately thin and defensive: every host-provided API is feature
+ * detected so version drift in the developer preview cannot fail the fiber.
+ * The browser half does the heavy lifting (panel UI, pagination,
+ * provider writes); this half normalizes config, registers an optional
+ * settings section so the client can read the resolved composition values,
+ * and logs.
+ */
+import {
+  CONFIG_DEFAULTS,
+  LOG_PREFIX,
+  SECTION_NS,
+  normalizeConfig,
+} from './core.js'
+
+export const name = 'free-models-hub'
+
+function log(debug, ...args) {
+  if (debug) console.log(LOG_PREFIX, ...args)
+}
+
+function warn(...args) {
+  console.warn(LOG_PREFIX, ...args)
+}
+
+export function apply(ctx, config = {}) {
+  const { value: cfg, warnings } = normalizeConfig(config)
+  for (const message of warnings) warn('config:', message)
+  log(cfg.debug, 'loaded with config:', cfg)
+
+  // Optional enhancement: expose our namespace on the settings page so the
+  // client can read the resolved values (composition base included). Both
+  // imports are feature-detected; when either is missing we simply skip —
+  // the client then falls back to built-in defaults or a local override.
+  let disposed = false
+  let sectionDispose = null
+
+  Promise.all([
+    import('@deepseek-ai/schemastery').catch(() => null),
+    import('@deepseek-ai/dsh-settings').catch(() => null),
+  ])
+    .then(([schemastery, settings]) => {
+      if (disposed) return
+      if (!schemastery || !settings || typeof settings.installSettingsSection !== 'function') {
+        log(cfg.debug, 'settings surface unavailable; skipping section registration')
+        return
+      }
+      try {
+        const Config = schemastery.object({
+          backendUrl: schemastery.string().default(CONFIG_DEFAULTS.backendUrl),
+          pageSize: schemastery.number().step(1).min(1).max(50).default(CONFIG_DEFAULTS.pageSize),
+          requestTimeoutMs: schemastery.number().step(1).min(1000).max(60000).default(CONFIG_DEFAULTS.requestTimeoutMs),
+          uiSlot: schemastery.string().default(CONFIG_DEFAULTS.uiSlot),
+          providerIdPrefix: schemastery.string().default(CONFIG_DEFAULTS.providerIdPrefix),
+          debug: schemastery.boolean().default(false),
+        })
+        const disposer = settings.installSettingsSection(ctx, SECTION_NS, Config, cfg, {})
+        if (typeof disposer === 'function') sectionDispose = disposer
+        log(cfg.debug, `settings section "${SECTION_NS}" registered`)
+      } catch (error) {
+        log(cfg.debug, 'section registration failed:', error && error.message)
+      }
+    })
+    .catch((error) => {
+      if (!disposed) log(cfg.debug, 'optional settings setup skipped:', error && error.message)
+    })
+
+  ctx.effect(() => () => {
+    disposed = true
+    if (typeof sectionDispose === 'function') {
+      try {
+        sectionDispose()
+      } catch { /* cleanup must never throw across unload */ }
+    }
+  })
+
+  log(cfg.debug, `host ready (backendUrl=${cfg.backendUrl || '(not configured)'}, pageSize=${cfg.pageSize})`)
+}

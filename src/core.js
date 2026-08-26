@@ -1,0 +1,246 @@
+/**
+ * dsh-free-models-hub · pure core helpers.
+ *
+ * Everything in this module is side-effect free so it can be unit-tested
+ * directly under node:test. The browser half keeps small private copies of
+ * pageWindow()/safeHttpUrl()/slugify() because the client bundle must stay a
+ * single self-contained file; test/plugin.test.js asserts both copies behave
+ * identically.
+ */
+
+export const PLUGIN_ID = 'free-models-hub'
+export const LOG_PREFIX = '[free-models-hub]'
+export const SETTINGS_NS = 'llm-pi-ai'
+export const SECTION_NS = 'free-models-hub'
+
+export const DEFAULT_FOOTER_LINKS = Object.freeze([
+  Object.freeze({ label: '技术笔记', url: 'http://blog.4wc.cn' }),
+  Object.freeze({ label: '插件开发', url: 'https://blog.gd7.cn/' }),
+  Object.freeze({ label: '联系站长', url: 'http://web.wuyiyun.cn/' }),
+])
+
+export const CONFIG_DEFAULTS = Object.freeze({
+  backendUrl: '',
+  pageSize: 10,
+  requestTimeoutMs: 10000,
+  uiSlot: 'sidebar.workspaces',
+  providerIdPrefix: 'freehub',
+  footerLinks: DEFAULT_FOOTER_LINKS,
+  debug: false,
+})
+
+/** Coerce to an integer inside [min,max]; anything else falls back. */
+export function clampInt(value, min, max, fallback) {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+/** Only http(s) absolute URLs count as safe targets for links or fetches.
+ *  Returns the canonical serialized URL — what we validate is exactly what
+ *  the caller will use (the WHATWG parser strips smuggled control chars). */
+export function safeHttpUrl(value) {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 2048) return ''
+  let parsed
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return ''
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return ''
+  return parsed.toString()
+}
+
+/** Stable, lowercase provider-id fragment derived from a model title. */
+export function slugify(title, maxLen = 40) {
+  const base = String(title ?? '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLen)
+    .replace(/-+$/g, '')
+  return base || 'model'
+}
+
+export function providerId(prefix, title) {
+  const safePrefix = typeof prefix === 'string' && /^[a-z][a-z0-9-]{0,20}$/.test(prefix) ? prefix : 'freehub'
+  return `${safePrefix}-${slugify(title)}`
+}
+
+export function apiKeyEnvName(pid) {
+  const snake = String(pid ?? '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/^([0-9])/, 'x$1')
+    .toUpperCase()
+  return `${snake || 'MODEL'}_API_KEY`
+}
+
+/**
+ * Normalize raw patch/user config into a safe, fully-defaulted object.
+ * Returns { value, warnings: string[] }; invalid fields fall back loudly via
+ * warnings instead of failing the whole plugin load.
+ */
+export function normalizeConfig(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  const warnings = []
+  const out = {}
+
+  const backendUrl = safeHttpUrl(src.backendUrl)
+  if (backendUrl) {
+    out.backendUrl = backendUrl.replace(/\/+$/, '')
+  } else {
+    if (typeof src.backendUrl === 'string' && src.backendUrl.trim() !== '') {
+      warnings.push(`backendUrl ignored (must be an absolute http/https URL): ${String(src.backendUrl).slice(0, 120)}`)
+    }
+    out.backendUrl = ''
+  }
+
+  out.pageSize = clampInt(src.pageSize, 1, 50, CONFIG_DEFAULTS.pageSize)
+  out.requestTimeoutMs = clampInt(src.requestTimeoutMs, 1000, 60000, CONFIG_DEFAULTS.requestTimeoutMs)
+
+  if (typeof src.uiSlot === 'string' && src.uiSlot.trim() !== '' && src.uiSlot.length <= 64) {
+    out.uiSlot = src.uiSlot.trim()
+  } else {
+    out.uiSlot = CONFIG_DEFAULTS.uiSlot
+    if (src.uiSlot != null) warnings.push('uiSlot reset to default (non-empty string <= 64 chars expected)')
+  }
+
+  if (typeof src.providerIdPrefix === 'string' && /^[a-z][a-z0-9-]{0,20}$/.test(src.providerIdPrefix)) {
+    out.providerIdPrefix = src.providerIdPrefix
+  } else {
+    out.providerIdPrefix = CONFIG_DEFAULTS.providerIdPrefix
+    if (src.providerIdPrefix != null) warnings.push('providerIdPrefix reset to "freehub" (lowercase letters/digits/dashes, starts with a letter)')
+  }
+
+  const links = []
+  if (Array.isArray(src.footerLinks)) {
+    for (const raw of src.footerLinks.slice(0, 6)) {
+      const item = raw && typeof raw === 'object' ? raw : {}
+      const label = typeof item.label === 'string' ? item.label.trim().slice(0, 24) : ''
+      const url = safeHttpUrl(item.url)
+      if (label && url) links.push({ label, url })
+      else warnings.push(`footerLink dropped (need label + http/https url): ${JSON.stringify(item).slice(0, 80)}`)
+    }
+  }
+  out.footerLinks = links.length > 0 ? links : [...DEFAULT_FOOTER_LINKS]
+
+  out.debug = src.debug === true
+
+  return { value: out, warnings }
+}
+
+/**
+ * Pagination window: numbers and '…' markers.
+ *
+ * Design contract (unit-tested): first and last page are always real
+ * buttons; collapsed ranges become single '…' markers; the number of page
+ * buttons never exceeds `width` (minimum 5). Between the pinned edges sits
+ * a sliding mid-window of `width - 2` entries that hugs the left edge near
+ * page 1 and the right edge near the last page.
+ */
+export function pageWindow(current, total, width = 7) {
+  const tot = clampInt(total, 1, Number.MAX_SAFE_INTEGER, 1)
+  const cur = Math.min(clampInt(current, 1, Number.MAX_SAFE_INTEGER, 1), tot)
+  const w = Math.max(5, clampInt(width, 5, 15, 7))
+  if (tot <= w) {
+    const all = []
+    for (let i = 1; i <= tot; i++) all.push(i)
+    return all
+  }
+  const mid = w - 2
+  let start = Math.max(2, cur - ((mid - 1) >> 1))
+  let end = Math.min(tot - 1, start + mid - 1)
+  if (end >= tot - 1) {
+    end = tot - 1
+    start = Math.max(2, end - mid + 1)
+  }
+  const pages = [1]
+  if (start > 2) pages.push('…')
+  for (let i = start; i <= end; i++) pages.push(i)
+  if (end < tot - 1) pages.push('…')
+  pages.push(tot)
+  return pages
+}
+
+function yamlQuote(value) {
+  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+}
+
+/**
+ * Fallback YAML snippet shown when live settings writes are unavailable.
+ * Mirrors the documented custom-provider route shape.
+ */
+export function toYamlSnippet({ pid, entry }) {
+  const lines = [
+    'llm-pi-ai:',
+    '  providers:',
+    `    ${pid}:`,
+    `      apiKeyEnv: ${entry.apiKeyEnv}`,
+    `      api: ${entry.api}`,
+    `      baseURL: ${yamlQuote(entry.baseURL)}`,
+    '      compat:',
+    `        supportsDeveloperRole: ${entry.compat.supportsDeveloperRole}`,
+    `        maxTokensField: ${entry.compat.maxTokensField}`,
+    '      models:',
+  ]
+  for (const m of entry.models) {
+    lines.push(`        - id: ${yamlQuote(m.id)}`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Build one llm-pi-ai provider entry from a backend item.
+ * compat defaults follow the official troubleshooting guidance for third
+ * party OpenAI-compatible gateways.
+ */
+export function buildProviderEntry({ prefix, title, apiBase, modelId }) {
+  const pid = providerId(prefix, title)
+  return {
+    pid,
+    entry: {
+      apiKeyEnv: apiKeyEnvName(pid),
+      api: 'openai-completions',
+      baseURL: String(apiBase),
+      compat: {
+        supportsDeveloperRole: false,
+        maxTokensField: 'max_tokens',
+      },
+      models: [{ id: String(modelId) }],
+    },
+  }
+}
+
+/**
+ * Validate + map the public API payload into canonical items.
+ * Drops malformed rows instead of throwing on single bad entries.
+ * Canonical item: { id, title, apiBase, modelId, keyUrl }
+ */
+export function parseModelsResponse(payload, pageSize) {
+  if (!payload || typeof payload !== 'object' || payload.ok !== true) {
+    throw new TypeError('response is not a valid models payload')
+  }
+  const total = clampInt(payload.total, 0, Number.MAX_SAFE_INTEGER, 0)
+  const totalPages = clampInt(payload.total_pages, 1, Number.MAX_SAFE_INTEGER, 1)
+  const page = clampInt(payload.page, 1, totalPages, 1)
+  const size = clampInt(payload.page_size, 1, 50, clampInt(pageSize, 1, 50, 10))
+  const rawItems = Array.isArray(payload.items) ? payload.items : []
+  const items = []
+  for (const row of rawItems.slice(0, size)) {
+    if (!row || typeof row !== 'object') continue
+    const id = Number(row.id)
+    const title = typeof row.title === 'string' ? row.title.trim().slice(0, 200) : ''
+    const apiBase = safeHttpUrl(row.api_base_url)
+    const modelId = typeof row.model_name === 'string' ? row.model_name.trim().slice(0, 120) : ''
+    // A missing key application link degrades the button, not the row.
+    const keyUrl = safeHttpUrl(row.key_apply_url)
+    if (!Number.isFinite(id) || !title || !apiBase || !modelId) continue
+    items.push({ id, title, apiBase, modelId, keyUrl })
+  }
+  return { total, totalPages, page, pageSize: size, items }
+}
