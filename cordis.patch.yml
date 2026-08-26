@@ -9,7 +9,7 @@
         # out of the box; override here only if you run your own backend.
         backendUrl: 'https://free-api.gd7.cn'
         # Items per page (server clamps to 1..50).
-        pageSize: 10
+        pageSize: 20
         # Fetch timeout in milliseconds.
         requestTimeoutMs: 10000
         # Empty (default) = right-edge toggle button + slide-in drawer panel,

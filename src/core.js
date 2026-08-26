@@ -21,7 +21,7 @@ export const DEFAULT_FOOTER_LINKS = Object.freeze([
 
 export const CONFIG_DEFAULTS = Object.freeze({
   backendUrl: '',
-  pageSize: 10,
+  pageSize: 20,
   requestTimeoutMs: 10000,
   uiSlot: '', // empty = deterministic right-edge drawer with its own toggle
   providerIdPrefix: 'freehub',

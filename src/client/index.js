@@ -85,7 +85,7 @@ const STR = Object.freeze({
 const DEFAULTS = Object.freeze({
   // Author-operated data source: the panel is usable right after install.
   backendUrl: 'https://free-api.gd7.cn',
-  pageSize: 10,
+  pageSize: 20,
   requestTimeoutMs: 10000,
   // Empty (default) = deterministic right-edge drawer with its own toggle
   // button. Set a slot name only if you explicitly want in-sidebar mounting.
