@@ -24,8 +24,15 @@ const clientRel = pkg.exports && pkg.exports['./client']
 t('exports["./client"] declared', !!clientRel)
 const clientAbs = path.join(root, clientRel)
 t('client bundle ships in the package', fs.existsSync(clientAbs))
-const client = require(clientAbs)
-t('client exports name/inject/apply triple', client.name === 'free-models-hub-client' && Array.isArray(client.inject) && typeof client.apply === 'function')
+// The served script registers via __ModuleLoader__ (lazy-CJS model).
+let registered = null
+globalThis.window = { __ModuleLoader__: { load: (def) => { registered = def } } }
+try { require(clientAbs) } catch (e) { t('client bundle executes without throwing', false) }
+delete globalThis.window
+t('client bundle registers via __ModuleLoader__.load', !!registered && registered.id === 'dsh-free-models-hub')
+let client = null
+try { client = registered.factory(() => { throw new Error('no requires expected') }) } catch (e) { t('client factory materializes', false) }
+t('client exports name/inject/apply triple', !!client && client.name === 'free-models-hub-client' && Array.isArray(client.inject) && typeof client.apply === 'function')
 t('dsh.client.platform = web (client-modules scan condition)', !!(pkg.dsh && pkg.dsh.client && pkg.dsh.client.platform === 'web'))
 t('zero runtime dependencies (offline installable)', Object.keys(pkg.dependencies || {}).length === 0)
 t('no prepare build script (no pnpm allowBuilds prompt)', !(pkg.scripts && pkg.scripts.prepare))

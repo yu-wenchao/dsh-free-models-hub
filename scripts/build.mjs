@@ -31,9 +31,29 @@ function stripExports(source) {
   return source.replace(/^export\s+/gm, '')
 }
 
+/**
+ * dsh-free-models-hub client bundle format (per @deepseek-ai/dsh-client-modules):
+ * executing the served script must only REGISTER the factory via
+ * `window.__ModuleLoader__.load({id, factory})`; all side effects live inside
+ * the factory closure and run at materialization (factory(require) → exports).
+ */
 function buildClientBundle(coreSrc, clientSrc) {
-  const body = `${stripExports(coreSrc)}\n${stripExports(clientSrc)}\nreturn { name: name, inject: inject, apply: apply };\n`
-  return `${BANNER}module.exports = (function () {\n'use strict'\n${body}})();\n`
+  const body =
+    `${stripExports(coreSrc)}\n` +
+    `${stripExports(clientSrc)}\n` +
+    `const __exports__ = { name: name, inject: inject, apply: apply };\n` +
+    `if (module) { module.exports = __exports__; }\n` +
+    `return __exports__;\n`
+  return (
+    `${BANNER}` +
+    `window.__ModuleLoader__.load({\n` +
+    `  id: 'dsh-free-models-hub',\n` +
+    `  factory: function (require, module) {\n` +
+    `'use strict'\n` +
+    `${body}` +
+    `  }\n` +
+    `});\n`
+  )
 }
 
 async function main() {

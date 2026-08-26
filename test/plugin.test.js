@@ -262,11 +262,26 @@ test('parseModelsResponse rejects non-ok payloads', () => {
 
 /* ------------------------------------------------------- build artifacts */
 
-test('lib/client.cjs exposes the plugin triple and matches sources', async () => {
-  const client = require(join(root, 'lib', 'client.cjs'))
-  assert.equal(client.name, 'free-models-hub-client')
-  assert.deepEqual(client.inject, ['slots'])
-  assert.equal(typeof client.apply, 'function')
+test('lib/client.cjs registers via __ModuleLoader__ and materializes the triple', async () => {
+  // The served bundle must only REGISTER its factory at execution time
+  // (lazy-CJS model); side effects happen at materialization.
+  let registered = null
+  globalThis.window = { __ModuleLoader__: { load: (def) => { registered = def } } }
+  try {
+    delete require.cache[join(root, 'lib', 'client.cjs')]
+    const mod = require(join(root, 'lib', 'client.cjs'))
+    assert.notEqual(mod.name, 'free-models-hub-client', 'execution must not export the plugin directly')
+    assert.equal(registered.id, 'dsh-free-models-hub', 'registration id must equal the package name')
+    assert.equal(typeof registered.factory, 'function')
+
+    // Materialize like the runtime does: exports = factory(require)
+    const exports = registered.factory(() => { throw new Error('client bundle must not require anything') })
+    assert.equal(exports.name, 'free-models-hub-client')
+    assert.deepEqual(exports.inject, ['slots'])
+    assert.equal(typeof exports.apply, 'function')
+  } finally {
+    delete globalThis.window
+  }
 
   const src = await readFile(join(root, 'src', 'client', 'index.js'), 'utf8')
   assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, ''), /^\s*import\s/m, 'client half must stay dependency-free')
