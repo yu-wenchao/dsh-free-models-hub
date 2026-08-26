@@ -23,7 +23,7 @@ export const CONFIG_DEFAULTS = Object.freeze({
   backendUrl: '',
   pageSize: 10,
   requestTimeoutMs: 10000,
-  uiSlot: 'sidebar.workspaces',
+  uiSlot: '', // empty = deterministic right-edge drawer with its own toggle
   providerIdPrefix: 'freehub',
   footerLinks: DEFAULT_FOOTER_LINKS,
   debug: false,
@@ -103,7 +103,8 @@ export function normalizeConfig(raw) {
   out.pageSize = clampInt(src.pageSize, 1, 50, CONFIG_DEFAULTS.pageSize)
   out.requestTimeoutMs = clampInt(src.requestTimeoutMs, 1000, 60000, CONFIG_DEFAULTS.requestTimeoutMs)
 
-  if (typeof src.uiSlot === 'string' && src.uiSlot.trim() !== '' && src.uiSlot.length <= 64) {
+  // Empty string is VALID: it selects the deterministic drawer mounting.
+  if (typeof src.uiSlot === 'string' && src.uiSlot.trim().length <= 64) {
     out.uiSlot = src.uiSlot.trim()
   } else {
     out.uiSlot = CONFIG_DEFAULTS.uiSlot

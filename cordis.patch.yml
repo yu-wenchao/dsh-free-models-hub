@@ -12,9 +12,10 @@
         pageSize: 10
         # Fetch timeout in milliseconds.
         requestTimeoutMs: 10000
-        # Sidebar slot used for injection; falls back to a floating drawer
-        # automatically when the slot does not exist in your DSH version.
-        uiSlot: sidebar.workspaces
+        # Empty (default) = right-edge toggle button + slide-in drawer panel,
+        # identical on every DSH build. Set a slot name (e.g.
+        # sidebar.workspaces) only for in-sidebar mounting.
+        uiSlot: ''
         # Prefix for generated provider ids written into llm-pi-ai.providers.
         providerIdPrefix: freehub
         # Fixed footer menu of the panel (http/https only).

@@ -1,8 +1,19 @@
 # Changelog
 
-All notable changes to this project are documented here.
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-versions follow [SemVer](https://semver.org/).
+## [0.2.0] — 2026-08-26
+
+### Changed
+
+- **Panel mounting redesigned**: the leaderboard now docks as a right-side
+  slide-in drawer with its own circular 🎁 toggle button on the right edge —
+  deterministic on every DSH build (no dependence on internal sidebar slot
+  layout). Open state persists across reloads; Esc closes.
+- Default `uiSlot` is now empty (drawer mode). In-sidebar slot mounting stays
+  available as an opt-in via config.
+- One-click configure toast now tells users exactly where to paste the key:
+  设置 → 模型 → `freehub-*` 提供方.
+- Default `backendUrl` points at the author-operated source
+  (`https://free-api.gd7.cn`) — the panel works immediately after install.
 
 ## [0.1.0] — 2026-08-26
 

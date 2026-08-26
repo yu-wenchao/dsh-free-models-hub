@@ -1,52 +1,52 @@
 {
-  "name": "dsh-free-models-hub",
-  "version": "0.1.0",
-  "description": "Free models leaderboard for DeepSeek Harness: paginated sidebar panel, one-click custom-provider setup (you only paste your free API key), powered by your own PHP 7.4 + SQLite backend.",
-  "type": "module",
-  "main": "./lib/index.js",
-  "exports": {
-    ".": "./lib/index.js",
-    "./client": "./lib/client.cjs",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "lib",
-    "cordis.patch.yml",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "node --test test/plugin.test.js",
-    "verify": "node scripts/build.mjs --check"
-  },
-  "keywords": [
-    "deepseek-harness",
-    "dsh-plugin",
-    "dsh-bundle",
-    "free-models",
-    "model-provider",
-    "sidebar"
-  ],
-  "author": "dsh-free-models-hub authors",
-  "license": "MIT",
-  "homepage": "https://github.com/yu-wenchao/dsh-free-models-hub#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/yu-wenchao/dsh-free-models-hub.git"
-  },
-  "bugs": {
-    "url": "https://github.com/yu-wenchao/dsh-free-models-hub/issues"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web"
-    }
-  }
+    "name":  "dsh-free-models-hub",
+    "version":  "0.2.0",
+    "description":  "Free models leaderboard for DeepSeek Harness: paginated sidebar panel, one-click custom-provider setup (you only paste your free API key), powered by your own PHP 7.4 + SQLite backend.",
+    "type":  "module",
+    "main":  "./lib/index.js",
+    "exports":  {
+                    ".":  "./lib/index.js",
+                    "./client":  "./lib/client.cjs",
+                    "./package.json":  "./package.json"
+                },
+    "files":  [
+                  "lib",
+                  "cordis.patch.yml",
+                  "README.md",
+                  "LICENSE"
+              ],
+    "scripts":  {
+                    "build":  "node scripts/build.mjs",
+                    "test":  "node --test test/plugin.test.js",
+                    "verify":  "node scripts/build.mjs --check"
+                },
+    "keywords":  [
+                     "deepseek-harness",
+                     "dsh-plugin",
+                     "dsh-bundle",
+                     "free-models",
+                     "model-provider",
+                     "sidebar"
+                 ],
+    "author":  "dsh-free-models-hub authors",
+    "license":  "MIT",
+    "homepage":  "https://github.com/yu-wenchao/dsh-free-models-hub#readme",
+    "repository":  {
+                       "type":  "git",
+                       "url":  "git+https://github.com/yu-wenchao/dsh-free-models-hub.git"
+                   },
+    "bugs":  {
+                 "url":  "https://github.com/yu-wenchao/dsh-free-models-hub/issues"
+             },
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "dsh":  {
+                "bundle":  {
+                               "patch":  "./cordis.patch.yml"
+                           },
+                "client":  {
+                               "platform":  "web"
+                           }
+            }
 }

@@ -103,7 +103,7 @@ test('normalizeConfig warns and falls back per-field without throwing', () => {
   const { value, warnings } = normalizeConfig({
     backendUrl: 'ftp://nope',
     pageSize: 9999,
-    uiSlot: '',
+    uiSlot: 42,
     providerIdPrefix: '1bad',
     footerLinks: [{ label: 'ok', url: 'https://ok' }, { label: 'x', url: 'javascript:' }],
     debug: true,
@@ -124,6 +124,12 @@ test('normalizeConfig keeps custom slot and links', () => {
   })
   assert.equal(value.uiSlot, 'sidebar.settings')
   assert.equal(value.footerLinks.length, 1)
+  assert.equal(warnings.length, 0)
+})
+
+test('normalizeConfig treats empty uiSlot as valid drawer mode', () => {
+  const { value, warnings } = normalizeConfig({ uiSlot: '' })
+  assert.equal(value.uiSlot, '')
   assert.equal(warnings.length, 0)
 })
 
