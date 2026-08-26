@@ -25,9 +25,25 @@ export const CONFIG_DEFAULTS = Object.freeze({
   requestTimeoutMs: 10000,
   uiSlot: '', // empty = deterministic right-edge drawer with its own toggle
   providerIdPrefix: 'freehub',
+  proxyPort: 8787, // local multi-key rotation proxy (127.0.0.1 only)
   footerLinks: DEFAULT_FOOTER_LINKS,
   debug: false,
 })
+
+/**
+ * Round-robin key picker for the local rotation proxy.
+ * counter is mutated by the caller (kept in memory inside the proxy).
+ * Returns undefined for an empty/invalid pool so callers can fall back to
+ * passing through whatever authorization the inbound request already had.
+ */
+export function pickRotatedKey(pool, counterRef) {
+  if (!Array.isArray(pool)) return undefined
+  const keys = pool.filter((k) => typeof k === 'string' && k.trim() !== '')
+  if (keys.length === 0) return undefined
+  const n = clampInt(counterRef.count, 0, Number.MAX_SAFE_INTEGER, 0)
+  counterRef.count = n + 1
+  return keys[n % keys.length]
+}
 
 /** Coerce to an integer inside [min,max]; anything else falls back. */
 export function clampInt(value, min, max, fallback) {
@@ -102,6 +118,7 @@ export function normalizeConfig(raw) {
 
   out.pageSize = clampInt(src.pageSize, 1, 50, CONFIG_DEFAULTS.pageSize)
   out.requestTimeoutMs = clampInt(src.requestTimeoutMs, 1000, 60000, CONFIG_DEFAULTS.requestTimeoutMs)
+  out.proxyPort = clampInt(src.proxyPort, 1024, 65535, CONFIG_DEFAULTS.proxyPort)
 
   // Empty string is VALID: it selects the deterministic drawer mounting.
   if (typeof src.uiSlot === 'string' && src.uiSlot.trim().length <= 64) {
@@ -240,8 +257,10 @@ export function parseModelsResponse(payload, pageSize) {
     const modelId = typeof row.model_name === 'string' ? row.model_name.trim().slice(0, 120) : ''
     // A missing key application link degrades the button, not the row.
     const keyUrl = safeHttpUrl(row.key_apply_url)
+    const badge = row.badge === 'hot' || row.badge === 'rec' ? row.badge : ''
+    const pinned = row.pinned === 1 || row.pinned === true
     if (!Number.isFinite(id) || !title || !apiBase || !modelId) continue
-    items.push({ id, title, apiBase, modelId, keyUrl })
+    items.push({ id, title, apiBase, modelId, keyUrl, badge, pinned })
   }
   return { total, totalPages, page, pageSize: size, items }
 }

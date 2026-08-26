@@ -18,6 +18,7 @@ import {
   normalizeConfig,
   pageWindow,
   parseModelsResponse,
+  pickRotatedKey,
   providerId,
   safeHttpUrl,
   slugify,
@@ -127,6 +128,17 @@ test('normalizeConfig keeps custom slot and links', () => {
   assert.equal(warnings.length, 0)
 })
 
+test('normalizeConfig clamps proxyPort to 1024..65535', () => {
+  const { value: v1 } = normalizeConfig({ proxyPort: 3000 })
+  assert.equal(v1.proxyPort, 3000)
+  const { value: v2 } = normalizeConfig({ proxyPort: 80 })
+  assert.equal(v2.proxyPort, 1024)
+  const { value: v3 } = normalizeConfig({ proxyPort: 99999 })
+  assert.equal(v3.proxyPort, 65535)
+  const { value: v4 } = normalizeConfig({})
+  assert.equal(v4.proxyPort, CONFIG_DEFAULTS.proxyPort)
+})
+
 test('normalizeConfig treats empty uiSlot as valid drawer mode', () => {
   const { value, warnings } = normalizeConfig({ uiSlot: '' })
   assert.equal(value.uiSlot, '')
@@ -227,7 +239,7 @@ test('parseModelsResponse maps to canonical items and tolerates missing key link
   const out = parseModelsResponse(payload(), 10)
   assert.equal(out.total, 2)
   assert.equal(out.items.length, 2)
-  assert.deepEqual(out.items[0], { id: 1, title: 'A', apiBase: 'https://a/v1', modelId: 'a', keyUrl: 'https://reg/a' })
+  assert.deepEqual(out.items[0], { id: 1, title: 'A', apiBase: 'https://a/v1', modelId: 'a', keyUrl: 'https://reg/a', badge: '', pinned: false })
   assert.equal(out.items[1].keyUrl, '')
 })
 
@@ -258,6 +270,55 @@ test('parseModelsResponse rejects non-ok payloads', () => {
   assert.throws(() => parseModelsResponse({ ok: false }, 10), TypeError)
   assert.throws(() => parseModelsResponse(null, 10), TypeError)
   assert.throws(() => parseModelsResponse('nope', 10), TypeError)
+})
+
+test('parseModelsResponse maps badge and pinned fields', () => {
+  const out = parseModelsResponse({
+    ok: true, page: 1, page_size: 10, total: 2, total_pages: 1,
+    items: [
+      { id: 1, title: 'Hot Model', api_base_url: 'https://a/v1', model_name: 'a', badge: 'hot', pinned: 1 },
+      { id: 2, title: 'Rec Model', api_base_url: 'https://b/v1', model_name: 'b', badge: 'rec', pinned: 0 },
+    ],
+  }, 10)
+  assert.equal(out.items[0].badge, 'hot')
+  assert.equal(out.items[0].pinned, true)
+  assert.equal(out.items[1].badge, 'rec')
+  assert.equal(out.items[1].pinned, false)
+})
+
+test('parseModelsResponse normalizes invalid badge to empty string', () => {
+  const out = parseModelsResponse({
+    ok: true, page: 1, page_size: 10, total: 1, total_pages: 1,
+    items: [{ id: 1, title: 'X', api_base_url: 'https://x/v1', model_name: 'x', badge: 'unknown' }],
+  }, 10)
+  assert.equal(out.items[0].badge, '')
+})
+
+/* ------------------------------------------------------------ pickRotatedKey */
+
+test('pickRotatedKey returns keys round-robin', () => {
+  const pool = ['k1', 'k2', 'k3']
+  const ref = { count: 0 }
+  assert.equal(pickRotatedKey(pool, ref), 'k1')
+  assert.equal(pickRotatedKey(pool, ref), 'k2')
+  assert.equal(pickRotatedKey(pool, ref), 'k3')
+  assert.equal(pickRotatedKey(pool, ref), 'k1') // wraps
+})
+
+test('pickRotatedKey skips empty strings in pool', () => {
+  const pool = ['', 'k1', '  ', 'k2']
+  const ref = { count: 0 }
+  assert.equal(pickRotatedKey(pool, ref), 'k1')
+  assert.equal(pickRotatedKey(pool, ref), 'k2')
+  assert.equal(pickRotatedKey(pool, ref), 'k1')
+})
+
+test('pickRotatedKey returns undefined for empty or invalid pool', () => {
+  const ref = { count: 0 }
+  assert.equal(pickRotatedKey([], ref), undefined)
+  assert.equal(pickRotatedKey(null, ref), undefined)
+  assert.equal(pickRotatedKey(undefined, ref), undefined)
+  assert.equal(pickRotatedKey(['', '  '], ref), undefined)
 })
 
 /* ------------------------------------------------------- build artifacts */

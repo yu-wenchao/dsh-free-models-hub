@@ -18,6 +18,8 @@
         uiSlot: ''
         # Prefix for generated provider ids written into llm-pi-ai.providers.
         providerIdPrefix: freehub
+        # Local multi-key rotation proxy port (127.0.0.1 only).
+        proxyPort: 8787
         # Fixed footer menu of the panel (http/https only).
         footerLinks:
           - label: 技术笔记

@@ -57,6 +57,19 @@ const STR = Object.freeze({
   fallbackCopy: '复制 YAML',
   fallbackClose: '我知道了',
   badSource: '数据源地址无效（需 http/https 绝对地址）',
+  batchBtn: '⚡ 配置本页全部',
+  batchApplying: (n) => `正在配置 ${n} 个模型…`,
+  batchDone: (ok, fail) => `批量配置完成：成功 ${ok} 个${fail ? `，失败 ${fail} 个` : ''}`,
+  poolBtn: '🔄 多 Key 轮换',
+  poolTitle: '多 Key 轮换配置',
+  poolHint: '每行一个 API Key，启用后将通过本地代理自动轮询分发。',
+  poolSave: '保存并启用',
+  poolDisable: '关闭轮换',
+  poolSaved: (n) => `已启用 ${n} 个 Key 轮换`,
+  poolCleared: '已关闭轮换，恢复直连',
+  proxyOffline: '本地轮换代理未运行，请确认插件已正常加载。',
+  badgeHot: '热门',
+  badgeRec: '推荐',
 })
 
 const DEFAULTS = Object.freeze({
@@ -68,6 +81,7 @@ const DEFAULTS = Object.freeze({
   // button. Set a slot name only if you explicitly want in-sidebar mounting.
   uiSlot: '',
   providerIdPrefix: 'freehub',
+  proxyPort: 8787,
   footerLinks: [
     { label: '技术笔记', url: 'http://blog.4wc.cn' },
     { label: '插件开发', url: 'https://blog.gd7.cn/' },
@@ -170,6 +184,7 @@ function resolveClientConfig(ctx) {
     requestTimeoutMs: DEFAULTS.requestTimeoutMs,
     uiSlot: DEFAULTS.uiSlot,
     providerIdPrefix: DEFAULTS.providerIdPrefix,
+    proxyPort: DEFAULTS.proxyPort,
     footerLinks: [...DEFAULTS.footerLinks],
   }
   try {
@@ -183,6 +198,7 @@ function resolveClientConfig(ctx) {
         const tmo = Number(resolved.requestTimeoutMs); if (Number.isFinite(tmo)) cfg.requestTimeoutMs = clampInt(tmo, 1000, 60000, cfg.requestTimeoutMs)
         if (typeof resolved.uiSlot === 'string' && resolved.uiSlot.trim()) cfg.uiSlot = resolved.uiSlot.trim()
         if (typeof resolved.providerIdPrefix === 'string' && /^[a-z][a-z0-9-]{0,20}$/.test(resolved.providerIdPrefix)) cfg.providerIdPrefix = resolved.providerIdPrefix
+        const pp = Number(resolved.proxyPort); if (Number.isFinite(pp)) cfg.proxyPort = clampInt(pp, 1024, 65535, cfg.proxyPort)
         if (Array.isArray(resolved.footerLinks)) {
           const links = []
           for (const item of resolved.footerLinks.slice(0, 6)) {
@@ -270,6 +286,17 @@ button.fmh-btn-apply[disabled]{opacity:.55;cursor:wait}
 .fmh-toast{background:#262a33;color:#eef1f7;border-radius:8px;padding:9px 16px;font-size:12.5px;box-shadow:0 6px 24px rgba(0,0,0,.4);max-width:76vw}
 .fmh-toast.ok{border-left:3px solid #34c77b}
 .fmh-toast.err{border-left:3px solid #ff6b6b}
+.fmh-badge{display:inline-block;font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;margin-left:5px;vertical-align:1px;font-weight:600}
+.fmh-badge.hot{background:rgba(212,56,13,.18);color:#ff7875;border:1px solid #a83a35}
+.fmh-badge.rec{background:rgba(22,119,255,.16);color:#69b1ff;border:1px solid #1d4ed8}
+.fmh-pin{opacity:.55;margin-right:2px}
+.fmh-batch-bar{display:flex;align-items:center;gap:6px;padding:4px 6px}
+.fmh-btn-batch{border:none;border-radius:6px;padding:5px 10px;font-size:11.5px;cursor:pointer;background:#4176E6;color:#fff;flex:0 0 auto}
+.fmh-btn-batch[disabled]{opacity:.5;cursor:wait}
+.fmh-pool-btn{border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;background:rgba(127,127,127,.15);color:inherit;flex:0 0 auto;opacity:.75}
+.fmh-pool-btn:hover{opacity:1;background:rgba(127,127,127,.25)}
+.fmh-pool-textarea{width:100%;min-height:80px;border-radius:6px;border:1px solid var(--fmh-line,#555);background:rgba(0,0,0,.25);color:inherit;padding:8px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+.fmh-dialog .fmh-actions{flex-direction:row;justify-content:flex-end;gap:8px;margin-top:10px}
 `
 
 function ensureStyle() {
@@ -327,7 +354,13 @@ export function apply(ctx) {
     }),
   )
 
-  const bodyEl = el('div', { class: 'fmh-body' }, [setupBox, stateEl, listEl, pagerEl, footEl])
+  const batchBtn = el('button', {
+    class: 'fmh-btn-batch', type: 'button', text: STR.batchBtn,
+    onclick: () => batchApplyAll(),
+  })
+  const batchBar = el('div', { class: 'fmh-batch-bar' }, [batchBtn])
+
+  const bodyEl = el('div', { class: 'fmh-body' }, [setupBox, stateEl, batchBar, listEl, pagerEl, footEl])
   const root = el('section', { class: 'fmh-panel' }, [bodyEl])
   document.body.appendChild(toastWrap)
 
@@ -343,6 +376,7 @@ export function apply(ctx) {
   /* ---- rendering ---- */
   function renderState() {
     setupBox.style.display = state.backendUrl ? 'none' : ''
+    batchBar.style.display = (state.backendUrl && state.data && state.data.items.length > 0) ? '' : 'none'
     stateEl.textContent = ''
     if (!state.backendUrl) { stateEl.textContent = ''; return }
     if (state.loading) {
@@ -386,7 +420,14 @@ export function apply(ctx) {
         el('b', { text: STR.modelLabel }),
         el('span', { class: 'fmh-code' }, [codeModel, el('button', { class: 'fmh-copy', type: 'button', title: 'copy', onclick: async () => toast(await copyText(item.modelId) ? STR.copied : STR.copyFail), text: '⧉' })]),
       ]),
-      el('div', { class: 'fmh-actions' }, [keyBtn, applyBtn]),
+      el('div', { class: 'fmh-actions' }, [
+        keyBtn,
+        applyBtn,
+        el('button', {
+          class: 'fmh-pool-btn', type: 'button', text: STR.poolBtn,
+          onclick: (ev) => { ev.stopPropagation(); openPoolDialog(item) },
+        }),
+      ]),
     ])
   }
 
@@ -409,7 +450,12 @@ export function apply(ctx) {
         },
       }, [
         el('span', { class: 'fmh-rank', text: `${offset + idx + 1}.` }),
-        el('span', { class: 'fmh-name', text: item.title, title: item.title }),
+        el('span', { class: 'fmh-name', title: item.title }, [
+          item.pinned ? el('span', { class: 'fmh-pin', text: '📌' }) : null,
+          item.title,
+          item.badge === 'hot' ? el('span', { class: 'fmh-badge hot', text: STR.badgeHot }) : null,
+          item.badge === 'rec' ? el('span', { class: 'fmh-badge rec', text: STR.badgeRec }) : null,
+        ]),
         el('span', { class: 'fmh-caret', text: '›' }),
       ])
       listEl.appendChild(el('li', { class: 'fmh-row' }, [title, detail]))
@@ -563,6 +609,162 @@ export function apply(ctx) {
       dbg('provider write failed:', error && error.message)
       showFallbackDialog(pid, entry)
     }
+  }
+
+  /* ---- proxy probe ---- */
+  async function probeProxy() {
+    for (let port = cfg.proxyPort; port < cfg.proxyPort + 10; port++) {
+      try {
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), 800)
+        const res = await fetch(`http://127.0.0.1:${port}/p/ping`, {
+          signal: ctrl.signal, mode: 'cors', credentials: 'omit',
+        })
+        clearTimeout(timer)
+        if (res.ok) return port
+      } catch { /* try next */ }
+    }
+    return null
+  }
+
+  /* ---- readField helpers ---- */
+  function readField(bound, key, fallback) {
+    try {
+      const v = bound && (bound.value || bound.base || bound)
+      const val = v && v[key]
+      return val && typeof val === 'object' ? { ...val } : { ...fallback }
+    } catch { return { ...fallback } }
+  }
+
+  /* ---- multi-key pool ---- */
+  async function writeProviderEnsure(item) {
+    const { pid, entry } = buildProviderEntry({
+      prefix: cfg.providerIdPrefix,
+      title: item.title,
+      apiBase: item.apiBase,
+      modelId: item.modelId,
+    })
+    const bound = getBoundNamespace('llm-pi-ai')
+    if (!bound || typeof bound.set !== 'function') return { pid, ok: false }
+    try {
+      const providers = readProviders(bound)
+      providers[pid] = entry
+      await bound.set('providers', providers)
+      return { pid, ok: true }
+    } catch {
+      return { pid, ok: false }
+    }
+  }
+
+  async function saveKeyPool(item, keys) {
+    const { pid, ok } = await writeProviderEnsure(item)
+    if (!ok) { toast(STR.proxyOffline, 'err'); return }
+    const hub = getBoundNamespace('free-models-hub')
+    if (!hub || typeof hub.set !== 'function') { toast(STR.proxyOffline, 'err'); return }
+    const pools = readField(hub, 'keyPools', {})
+    const targets = readField(hub, 'targets', {})
+    pools[pid] = keys
+    targets[pid] = item.apiBase
+    await hub.set('keyPools', pools)
+    await hub.set('targets', targets)
+    const port = await probeProxy()
+    if (!port) { toast(STR.proxyOffline, 'err'); return }
+    // Rewrite provider baseURL to proxy route
+    const lp = getBoundNamespace('llm-pi-ai')
+    if (lp && typeof lp.set === 'function') {
+      const providers = readProviders(lp)
+      if (providers[pid]) {
+        providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
+        await lp.set('providers', providers)
+      }
+    }
+    toast(STR.poolSaved(keys.length), 'ok')
+  }
+
+  async function disableKeyPool(item) {
+    const { pid } = buildProviderEntry({
+      prefix: cfg.providerIdPrefix,
+      title: item.title,
+      apiBase: item.apiBase,
+      modelId: item.modelId,
+    })
+    const hub = getBoundNamespace('free-models-hub')
+    const lp = getBoundNamespace('llm-pi-ai')
+    if (hub && typeof hub.set === 'function') {
+      const pools = readField(hub, 'keyPools', {})
+      const targets = readField(hub, 'targets', {})
+      delete pools[pid]
+      // Restore original baseURL
+      const orig = targets[pid] || item.apiBase
+      delete targets[pid]
+      await hub.set('keyPools', pools)
+      await hub.set('targets', targets)
+      if (lp && typeof lp.set === 'function') {
+        const providers = readProviders(lp)
+        if (providers[pid]) {
+          providers[pid] = { ...providers[pid], baseURL: orig }
+          await lp.set('providers', providers)
+        }
+      }
+    }
+    toast(STR.poolCleared, 'ok')
+  }
+
+  function openPoolDialog(item) {
+    const ta = el('textarea', { class: 'fmh-pool-textarea', placeholder: 'sk-key1\nsk-key2\nsk-key3', spellcheck: 'false' })
+    const close = () => overlay.remove()
+    const save = async () => {
+      const lines = ta.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+      if (lines.length === 0) { toast('请输入至少一个 Key', 'err'); return }
+      await saveKeyPool(item, lines)
+      close()
+    }
+    const disable = async () => { await disableKeyPool(item); close() }
+    const overlay = el('div', {
+      class: 'fmh-overlay',
+      onclick: (ev) => { if (ev.target === overlay) close() },
+    }, [el('div', { class: 'fmh-dialog', role: 'dialog', 'aria-modal': 'true' }, [
+      el('h3', { text: STR.poolTitle }),
+      el('p', { text: STR.poolHint }),
+      ta,
+      el('div', { class: 'fmh-actions' }, [
+        el('button', { class: 'fmh-btn', type: 'button', text: STR.poolDisable, onclick: disable }),
+        el('button', { class: 'fmh-btn fmh-btn-apply', type: 'button', text: STR.poolSave, onclick: save }),
+      ]),
+    ])])
+    document.body.appendChild(overlay)
+    ta.focus()
+    const esc = (ev) => { if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', esc) } }
+    document.addEventListener('keydown', esc)
+  }
+
+  /* ---- batch apply ---- */
+  async function batchApplyAll() {
+    if (!state.data || !state.data.items.length) return
+    const items = state.data.items
+    batchBtn.disabled = true
+    batchBtn.textContent = STR.batchApplying(items.length)
+    let ok = 0, fail = 0
+    for (const item of items) {
+      try { await applyProviderSilent(item); ok++ } catch { fail++ }
+    }
+    batchBtn.disabled = false
+    batchBtn.textContent = STR.batchBtn
+    toast(STR.batchDone(ok, fail), ok > 0 ? 'ok' : 'err')
+  }
+
+  async function applyProviderSilent(item) {
+    const { pid, entry } = buildProviderEntry({
+      prefix: cfg.providerIdPrefix,
+      title: item.title,
+      apiBase: item.apiBase,
+      modelId: item.modelId,
+    })
+    const bound = getBoundNamespace('llm-pi-ai')
+    if (!bound || typeof bound.set !== 'function') throw new Error('no settings')
+    const providers = readProviders(bound)
+    providers[pid] = entry
+    await bound.set('providers', providers)
   }
 
   /* ---- mounting ---- */
