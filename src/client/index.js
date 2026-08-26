@@ -662,14 +662,13 @@ export function apply(ctx) {
   }
 
   /* ---- multi-key pool ---- */
-  async function writeProviderEnsure(item, noAuth) {
+  async function writeProviderEnsure(item) {
     const { pid, entry } = buildProviderEntry({
       prefix: cfg.providerIdPrefix,
       title: item.title,
       apiBase: item.apiBase,
       modelIds: item.modelIds,
       rowId: item.id,
-      noAuth,
     })
     const bound = getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') return { pid, ok: false }
@@ -684,7 +683,7 @@ export function apply(ctx) {
   }
 
   async function saveKeyPool(item, keys) {
-    const { pid, ok } = await writeProviderEnsure(item, true)
+    const { pid, ok } = await writeProviderEnsure(item)
     if (!ok) { toast(STR.proxyOffline, 'err'); return }
 
     // Save to settings scope (live, in-memory)
