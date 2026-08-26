@@ -685,26 +685,60 @@ export function apply(ctx) {
   async function saveKeyPool(item, keys) {
     const { pid, ok } = await writeProviderEnsure(item)
     if (!ok) { toast(STR.proxyOffline, 'err'); return }
+
+    // Try settings scope first, fall back to proxy file API
     const hub = getBoundNamespace('free-models-hub')
-    if (!hub || typeof hub.set !== 'function') { toast(STR.proxyOffline, 'err'); return }
-    const pools = readField(hub, 'keyPools', {})
-    const targets = readField(hub, 'targets', {})
-    pools[pid] = keys
-    targets[pid] = item.apiBase
-    await hub.set('keyPools', pools)
-    await hub.set('targets', targets)
-    const port = await probeProxy()
-    if (!port) { toast(STR.proxyOffline, 'err'); return }
-    // Rewrite provider baseURL to proxy route
     const lp = getBoundNamespace('llm-pi-ai')
-    if (lp && typeof lp.set === 'function') {
+    let savedViaSettings = false
+
+    if (hub && typeof hub.set === 'function') {
+      try {
+        const pools = readField(hub, 'keyPools', {})
+        const targets = readField(hub, 'targets', {})
+        pools[pid] = keys
+        targets[pid] = item.apiBase
+        await hub.set('keyPools', pools)
+        await hub.set('targets', targets)
+        savedViaSettings = true
+      } catch { /* fall through to file API */ }
+    }
+
+    if (!savedViaSettings) {
+      // Write pools to proxy file via POST
+      const port = await probeProxy()
+      if (port) {
+        try {
+          // Read existing pools from proxy
+          const existing = await fetch(`http://127.0.0.1:${port}/p/ping`, { mode: 'cors' }).then(() => true).catch(() => false)
+          if (existing) {
+            // Merge with any existing file-based pools (read from a known key)
+            const mergedPools = {}
+            const mergedTargets = {}
+            mergedPools[pid] = keys
+            mergedTargets[pid] = item.apiBase
+            await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
+            })
+          }
+        } catch { /* best effort */ }
+      }
+    }
+
+    // Probe for running proxy and rewrite baseURL
+    const port = await probeProxy()
+    if (port && lp && typeof lp.set === 'function') {
       const providers = readProviders(lp)
       if (providers[pid]) {
         providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
         await lp.set('providers', providers)
       }
+      toast(STR.poolSaved(keys.length), 'ok')
+    } else {
+      // Proxy not running — still saved provider, just no rotation
+      toast(STR.poolSaved(keys.length) + '（代理未启动，轮换暂不可用，需重启 DSH）', 'ok')
     }
-    toast(STR.poolSaved(keys.length), 'ok')
   }
 
   async function disableKeyPool(item) {
@@ -717,21 +751,46 @@ export function apply(ctx) {
     })
     const hub = getBoundNamespace('free-models-hub')
     const lp = getBoundNamespace('llm-pi-ai')
+    // Clear from settings scope
     if (hub && typeof hub.set === 'function') {
-      const pools = readField(hub, 'keyPools', {})
-      const targets = readField(hub, 'targets', {})
-      delete pools[pid]
-      // Restore original baseURL
-      const orig = targets[pid] || item.apiBase
-      delete targets[pid]
-      await hub.set('keyPools', pools)
-      await hub.set('targets', targets)
-      if (lp && typeof lp.set === 'function') {
-        const providers = readProviders(lp)
-        if (providers[pid]) {
-          providers[pid] = { ...providers[pid], baseURL: orig }
-          await lp.set('providers', providers)
+      try {
+        const pools = readField(hub, 'keyPools', {})
+        const targets = readField(hub, 'targets', {})
+        const orig = targets[pid] || item.apiBase
+        delete pools[pid]
+        delete targets[pid]
+        await hub.set('keyPools', pools)
+        await hub.set('targets', targets)
+        if (lp && typeof lp.set === 'function') {
+          const providers = readProviders(lp)
+          if (providers[pid]) {
+            providers[pid] = { ...providers[pid], baseURL: orig }
+            await lp.set('providers', providers)
+          }
         }
+      } catch { /* best effort */ }
+    }
+    // Also clear from file-based pools via proxy
+    const port = await probeProxy()
+    if (port) {
+      try {
+        const mergedPools = {}
+        const mergedTargets = {}
+        mergedPools[pid] = []
+        mergedTargets[pid] = ''
+        await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
+        })
+      } catch { /* best effort */ }
+    }
+    // Restore original baseURL in provider
+    if (lp && typeof lp.set === 'function') {
+      const providers = readProviders(lp)
+      if (providers[pid]) {
+        providers[pid] = { ...providers[pid], baseURL: item.apiBase }
+        await lp.set('providers', providers)
       }
     }
     toast(STR.poolCleared, 'ok')
