@@ -1,20 +1,20 @@
 # Changelog
 
-## [0.2.0] 鈥?2026-08-26
+## [0.2.0] 閳?2026-08-26
 
 ### Changed
 
 - **Panel mounting redesigned**: the leaderboard now docks as a right-side
-  slide-in drawer with its own circular 馃巵 toggle button on the right edge 鈥?  deterministic on every DSH build (no dependence on internal sidebar slot
+  slide-in drawer with its own circular 棣冨返 toggle button on the right edge 閳?  deterministic on every DSH build (no dependence on internal sidebar slot
   layout). Open state persists across reloads; Esc closes.
 - Default `uiSlot` is now empty (drawer mode). In-sidebar slot mounting stays
   available as an opt-in via config.
 - One-click configure toast now tells users exactly where to paste the key:
-  璁剧疆 鈫?妯″瀷 鈫?`freehub-*` 鎻愪緵鏂?
+  鐠佸墽鐤?閳?濡€崇€?閳?`freehub-*` 閹绘劒绶甸弬?
 - Default `backendUrl` points at the author-operated source
-  (`https://free-api.gd7.cn`) 鈥?the panel works immediately after install.
+  (`https://free-api.gd7.cn`) 閳?the panel works immediately after install.
 
-## [0.1.0] 鈥?2026-08-26
+## [0.1.0] 閳?2026-08-26
 
 First release.
 
@@ -44,26 +44,26 @@ First release.
 - Single front-controller routing with clean URLs only: `/` public leaderboard
   page, `/api/models` data endpoint, `/admin` backend; direct `*.php` hits are
   canonically redirected or answered 404 and `X-Powered-By` is stripped, so the
-  stack stays invisible to visitors. Users configure just the site root 鈥?the
+  stack stays invisible to visitors. Users configure just the site root 閳?the
   panel appends `/api/models` itself.
-- Fixed footer menu: 鎶€鏈瑪璁?路 鎻掍欢寮€鍙?路 鑱旂郴绔欓暱 (configurable).
+- Fixed footer menu: 閹垛偓閺堫垳鐟拋?璺?閹绘帊娆㈠鈧崣?璺?閼辨梻閮寸粩娆撴毐 (configurable).
 - Floating-drawer degradation path and configurable sidebar slot name for
   resilience against DSH preview-period UI changes.
 - Docs set: product plan, technical design, development plan, code-review
   checklist, security review & acceptance matrix, release guide.
 - Zero-dependency build (`scripts/build.mjs`) with committed prebuilt `lib/`
   artifacts; installs from GitHub need no pnpm build-script allowance.
-- `scripts/installer-contract.cjs` 鈥?verifies every installer/client-scanner
+- `scripts/installer-contract.cjs` 閳?verifies every installer/client-scanner
   activation condition against an installed copy (11 checks, all passing on
   fresh install and on update-over-install).
-- `scripts/deploy-site.ps1` 鈥?one-command deployment of `server-php/` to a
+- `scripts/deploy-site.ps1` 閳?one-command deployment of `server-php/` to a
   local site root (phpStudy etc.), never touching the live `data/` directory.
 
 ### Verified
 
 - Plugin unit tests: 23/23 green (`npm test`).
-- Backend end-to-end smoke on real PHP 7.4.3: bootstrap 鈫?forced password
-  change 鈫?CORS exact echo/deny 鈫?CRUD 鈫?pagination & ordering 鈫?stored-XSS
-  escaping 鈫?non-http(s) scheme stripping at the API boundary 鈫?clean-URL
+- Backend end-to-end smoke on real PHP 7.4.3: bootstrap 閳?forced password
+  change 閳?CORS exact echo/deny 閳?CRUD 閳?pagination & ordering 閳?stored-XSS
+  escaping 閳?non-http(s) scheme stripping at the API boundary 閳?clean-URL
   routing incl. `.php` canonicalization, sensitive-path 404s and missing
   `X-Powered-By` fingerprint.

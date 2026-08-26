@@ -32,7 +32,7 @@ delete globalThis.window
 t('client bundle registers via __ModuleLoader__.load', !!registered && registered.id === 'dsh-free-models-hub')
 let client = null
 try { client = registered.factory(() => { throw new Error('no requires expected') }) } catch (e) { t('client factory materializes', false) }
-t('client exports name/inject/apply triple', !!client && client.name === 'free-models-hub-client' && Array.isArray(client.inject) && typeof client.apply === 'function')
+t('client exports name/inject/apply triple', !!client && client.name === 'free-models-hub-client' && Array.isArray(client.inject) && client.inject.includes('slots') && client.inject.includes('settingsScope') && typeof client.apply === 'function')
 t('dsh.client.platform = web (client-modules scan condition)', !!(pkg.dsh && pkg.dsh.client && pkg.dsh.client.platform === 'web'))
 t('zero runtime dependencies (offline installable)', Object.keys(pkg.dependencies || {}).length === 0)
 t('no prepare build script (no pnpm allowBuilds prompt)', !(pkg.scripts && pkg.scripts.prepare))

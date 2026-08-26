@@ -277,7 +277,7 @@ test('lib/client.cjs registers via __ModuleLoader__ and materializes the triple'
     // Materialize like the runtime does: exports = factory(require)
     const exports = registered.factory(() => { throw new Error('client bundle must not require anything') })
     assert.equal(exports.name, 'free-models-hub-client')
-    assert.deepEqual(exports.inject, ['slots'])
+    assert.deepEqual(exports.inject, ['slots', 'settingsScope'])
     assert.equal(typeof exports.apply, 'function')
   } finally {
     delete globalThis.window

@@ -21,7 +21,11 @@
 
 export const name = 'free-models-hub-client'
 
-export const inject = ['slots']
+// settingsScope is the documented client service for reading/writing the
+// Host settings namespaces (see the settings-card cookbook). Declaring it
+// here is what makes one-click provider writes possible; the web GUI stack
+// always provides it.
+export const inject = ['slots', 'settingsScope']
 
 const STR = Object.freeze({
   panelTitle: '免费模型榜',
@@ -548,8 +552,8 @@ export function apply(ctx) {
       const providers = readProviders(bound)
       providers[pid] = entry
       await bound.set('providers', providers)
-      // Best-effort verification; a mismatch sends the user the manual path.
-      const after = readProviders(getBoundNamespace('llm-pi-ai') || bound)
+      // Verify on the SAME bound scope; a mismatch sends the user the manual path.
+      const after = readProviders(bound)
       if (after[pid] && after[pid].baseURL === entry.baseURL) {
         toast(STR.applied(pid), 'ok')
       } else {
