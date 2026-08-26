@@ -81,9 +81,11 @@ export function slugify(title, maxLen = 40) {
   return base || 'model'
 }
 
-export function providerId(prefix, title) {
+export function providerId(prefix, title, rowId) {
   const safePrefix = typeof prefix === 'string' && /^[a-z][a-z0-9-]{0,20}$/.test(prefix) ? prefix : 'freehub'
-  return `${safePrefix}-${slugify(title)}`
+  const slug = slugify(title)
+  if (Number.isFinite(rowId) && rowId > 0) return `${safePrefix}-${slug}-${rowId}`
+  return `${safePrefix}-${slug}`
 }
 
 export function apiKeyEnvName(pid) {
@@ -216,9 +218,13 @@ export function toYamlSnippet({ pid, entry }) {
  * Build one llm-pi-ai provider entry from a backend item.
  * compat defaults follow the official troubleshooting guidance for third
  * party OpenAI-compatible gateways.
+ * modelIds is an array of model ID strings.
  */
-export function buildProviderEntry({ prefix, title, apiBase, modelId }) {
-  const pid = providerId(prefix, title)
+export function buildProviderEntry({ prefix, title, apiBase, modelIds, rowId }) {
+  const pid = providerId(prefix, title, rowId)
+  const models = Array.isArray(modelIds) && modelIds.length > 0
+    ? modelIds.filter((m) => typeof m === 'string' && m.trim() !== '').map((m) => ({ id: m.trim() }))
+    : [{ id: String(modelIds || '') }]
   return {
     pid,
     entry: {
@@ -229,7 +235,7 @@ export function buildProviderEntry({ prefix, title, apiBase, modelId }) {
         supportsDeveloperRole: false,
         maxTokensField: 'max_tokens',
       },
-      models: [{ id: String(modelId) }],
+      models,
     },
   }
 }
@@ -237,7 +243,7 @@ export function buildProviderEntry({ prefix, title, apiBase, modelId }) {
 /**
  * Validate + map the public API payload into canonical items.
  * Drops malformed rows instead of throwing on single bad entries.
- * Canonical item: { id, title, apiBase, modelId, keyUrl }
+ * Canonical item: { id, title, apiBase, modelIds, keyUrl, badge, pinned }
  */
 export function parseModelsResponse(payload, pageSize) {
   if (!payload || typeof payload !== 'object' || payload.ok !== true) {
@@ -254,13 +260,19 @@ export function parseModelsResponse(payload, pageSize) {
     const id = Number(row.id)
     const title = typeof row.title === 'string' ? row.title.trim().slice(0, 200) : ''
     const apiBase = safeHttpUrl(row.api_base_url)
-    const modelId = typeof row.model_name === 'string' ? row.model_name.trim().slice(0, 120) : ''
+    // model_name may be a string (legacy), an array, or missing.
+    let modelIds = []
+    if (Array.isArray(row.model_name)) {
+      modelIds = row.model_name.filter((m) => typeof m === 'string' && m.trim() !== '').map((m) => m.trim().slice(0, 120))
+    } else if (typeof row.model_name === 'string' && row.model_name.trim() !== '') {
+      modelIds = [row.model_name.trim().slice(0, 120)]
+    }
     // A missing key application link degrades the button, not the row.
     const keyUrl = safeHttpUrl(row.key_apply_url)
     const badge = row.badge === 'hot' || row.badge === 'rec' ? row.badge : ''
     const pinned = row.pinned === 1 || row.pinned === true
-    if (!Number.isFinite(id) || !title || !apiBase || !modelId) continue
-    items.push({ id, title, apiBase, modelId, keyUrl, badge, pinned })
+    if (!Number.isFinite(id) || !title || !apiBase || modelIds.length === 0) continue
+    items.push({ id, title, apiBase, modelIds, keyUrl, badge, pinned })
   }
   return { total, totalPages, page, pageSize: size, items }
 }

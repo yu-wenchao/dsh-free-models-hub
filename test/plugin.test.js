@@ -76,6 +76,10 @@ test('providerId uses validated prefix and stays idempotent', () => {
   assert.equal(providerId('Bad Prefix', 'm'), 'freehub-m')
   assert.equal(providerId(undefined, 'm'), 'freehub-m')
   assert.equal(providerId('kimi', 'K2 免费'), 'kimi-k2')
+  // With rowId suffix for uniqueness
+  assert.equal(providerId('freehub', 'GLM-5 Flash', 7), 'freehub-glm-5-flash-7')
+  assert.equal(providerId('freehub', 'agnes-ai-免费模型', 31), 'freehub-agnes-ai-31')
+  assert.equal(providerId('freehub', 'agnes-ai-免费模型', 32), 'freehub-agnes-ai-32')
 })
 
 test('apiKeyEnvName yields valid env identifiers', () => {
@@ -193,29 +197,43 @@ test('buildProviderEntry mirrors documented route shape', () => {
     prefix: 'freehub',
     title: 'GLM-5 Flash 免费额度',
     apiBase: 'https://gw.example/v1',
-    modelId: 'glm-5-flash',
+    modelIds: ['glm-5-flash', 'glm-5-plus'],
+    rowId: 7,
   })
-  assert.equal(pid, 'freehub-glm-5-flash')
+  assert.equal(pid, 'freehub-glm-5-flash-7')
   assert.equal(entry.api, 'openai-completions')
   assert.equal(entry.baseURL, 'https://gw.example/v1')
-  assert.equal(entry.apiKeyEnv, 'FREEHUB_GLM_5_FLASH_API_KEY')
+  assert.equal(entry.apiKeyEnv, 'FREEHUB_GLM_5_FLASH_7_API_KEY')
   assert.equal(entry.compat.supportsDeveloperRole, false)
   assert.equal(entry.compat.maxTokensField, 'max_tokens')
-  assert.deepEqual(entry.models, [{ id: 'glm-5-flash' }])
+  assert.deepEqual(entry.models, [{ id: 'glm-5-flash' }, { id: 'glm-5-plus' }])
 })
 
 test('toYamlSnippet round-trips the essential keys', () => {
   const { pid, entry } = buildProviderEntry({
     prefix: 'freehub',
     title: 'K2 Free',
-    apiBase: 'https://gw.example/v1"onload=x', // hostile string must be quoted safely
-    modelId: 'k2',
+    apiBase: 'https://gw.example/v1"onload=x',
+    modelIds: ['k2'],
+    rowId: 3,
   })
   const yaml = toYamlSnippet({ pid, entry })
-  assert.match(yaml, /^llm-pi-ai:\n {2}providers:\n {4}freehub-k2-free:/)
+  assert.match(yaml, /^llm-pi-ai:\n {2}providers:\n {4}freehub-k2-free-3:/)
   assert.match(yaml, /baseURL: "https:\/\/gw\.example\/v1\\"onload=x"/)
   assert.match(yaml, /supportsDeveloperRole: false/)
   assert.match(yaml, /- id: "k2"/)
+})
+
+test('buildProviderEntry handles single modelId string for backward compat', () => {
+  const { pid, entry } = buildProviderEntry({
+    prefix: 'freehub',
+    title: 'Single Model',
+    apiBase: 'https://a/v1',
+    modelIds: ['m1'],
+    rowId: 1,
+  })
+  assert.equal(pid, 'freehub-single-model-1')
+  assert.deepEqual(entry.models, [{ id: 'm1' }])
 })
 
 /* -------------------------------------------------- parseModelsResponse */
@@ -239,7 +257,7 @@ test('parseModelsResponse maps to canonical items and tolerates missing key link
   const out = parseModelsResponse(payload(), 10)
   assert.equal(out.total, 2)
   assert.equal(out.items.length, 2)
-  assert.deepEqual(out.items[0], { id: 1, title: 'A', apiBase: 'https://a/v1', modelId: 'a', keyUrl: 'https://reg/a', badge: '', pinned: false })
+  assert.deepEqual(out.items[0], { id: 1, title: 'A', apiBase: 'https://a/v1', modelIds: ['a'], keyUrl: 'https://reg/a', badge: '', pinned: false })
   assert.equal(out.items[1].keyUrl, '')
 })
 
@@ -247,10 +265,10 @@ test('parseModelsResponse drops malformed rows and unsafe urls', () => {
   const out = parseModelsResponse(payload({
     items: [
       null,
-      { id: 'x', title: 'no-id', api_base_url: 'https://a', model_name: 'm' },
-      { id: 3, title: '', api_base_url: 'https://a', model_name: 'm' },
-      { id: 4, title: 'js-url', api_base_url: 'javascript:x', model_name: 'm' },
-      { id: 5, title: 'good', api_base_url: ' https://good/v1 ', model_name: ' m ', key_apply_url: 'javascript:y' },
+      { id: 'x', title: 'no-id', api_base_url: 'https://a', model_name: ['m'] },
+      { id: 3, title: '', api_base_url: 'https://a', model_name: ['m'] },
+      { id: 4, title: 'js-url', api_base_url: 'javascript:x', model_name: ['m'] },
+      { id: 5, title: 'good', api_base_url: ' https://good/v1 ', model_name: [' m '], key_apply_url: 'javascript:y' },
     ],
     total: 9,
     total_pages: 3,
@@ -264,6 +282,7 @@ test('parseModelsResponse drops malformed rows and unsafe urls', () => {
   assert.equal(out.items.length, 1)
   assert.equal(out.items[0].apiBase, 'https://good/v1')
   assert.equal(out.items[0].keyUrl, '')
+  assert.deepEqual(out.items[0].modelIds, ['m'])
 })
 
 test('parseModelsResponse rejects non-ok payloads', () => {
@@ -276,8 +295,8 @@ test('parseModelsResponse maps badge and pinned fields', () => {
   const out = parseModelsResponse({
     ok: true, page: 1, page_size: 10, total: 2, total_pages: 1,
     items: [
-      { id: 1, title: 'Hot Model', api_base_url: 'https://a/v1', model_name: 'a', badge: 'hot', pinned: 1 },
-      { id: 2, title: 'Rec Model', api_base_url: 'https://b/v1', model_name: 'b', badge: 'rec', pinned: 0 },
+      { id: 1, title: 'Hot Model', api_base_url: 'https://a/v1', model_name: ['a'], badge: 'hot', pinned: 1 },
+      { id: 2, title: 'Rec Model', api_base_url: 'https://b/v1', model_name: ['b'], badge: 'rec', pinned: 0 },
     ],
   }, 10)
   assert.equal(out.items[0].badge, 'hot')
@@ -289,9 +308,25 @@ test('parseModelsResponse maps badge and pinned fields', () => {
 test('parseModelsResponse normalizes invalid badge to empty string', () => {
   const out = parseModelsResponse({
     ok: true, page: 1, page_size: 10, total: 1, total_pages: 1,
-    items: [{ id: 1, title: 'X', api_base_url: 'https://x/v1', model_name: 'x', badge: 'unknown' }],
+    items: [{ id: 1, title: 'X', api_base_url: 'https://x/v1', model_name: ['x'], badge: 'unknown' }],
   }, 10)
   assert.equal(out.items[0].badge, '')
+})
+
+test('parseModelsResponse handles multi-model array from API', () => {
+  const out = parseModelsResponse({
+    ok: true, page: 1, page_size: 10, total: 1, total_pages: 1,
+    items: [{ id: 1, title: 'Multi', api_base_url: 'https://m/v1', model_name: ['m1', 'm2', 'm3'] }],
+  }, 10)
+  assert.deepEqual(out.items[0].modelIds, ['m1', 'm2', 'm3'])
+})
+
+test('parseModelsResponse handles legacy string model_name', () => {
+  const out = parseModelsResponse({
+    ok: true, page: 1, page_size: 10, total: 1, total_pages: 1,
+    items: [{ id: 1, title: 'Legacy', api_base_url: 'https://l/v1', model_name: 'single' }],
+  }, 10)
+  assert.deepEqual(out.items[0].modelIds, ['single'])
 })
 
 /* ------------------------------------------------------------ pickRotatedKey */

@@ -70,6 +70,16 @@ const STR = Object.freeze({
   proxyOffline: '本地轮换代理未运行，请确认插件已正常加载。',
   badgeHot: '热门',
   badgeRec: '推荐',
+  refreshBtn: '🔄 刷新',
+  refreshing: '刷新中…',
+  refreshDone: (n) => `已刷新，${n} 个模型`,
+  upgradeBtn: '⬆ 升级',
+  upgradeChecking: '检查更新…',
+  upgradeLatest: '已是最新版本',
+  upgradeDownloading: '正在下载…',
+  upgradeDone: '升级完成，请重启',
+  upgradeFailed: '升级失败',
+  upgradeNoPermission: '升级需要本地代理支持',
 })
 
 const DEFAULTS = Object.freeze({
@@ -297,6 +307,8 @@ button.fmh-btn-apply[disabled]{opacity:.55;cursor:wait}
 .fmh-pool-btn:hover{opacity:1;background:rgba(127,127,127,.25)}
 .fmh-pool-textarea{width:100%;min-height:80px;border-radius:6px;border:1px solid var(--fmh-line,#555);background:rgba(0,0,0,.25);color:inherit;padding:8px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;resize:vertical}
 .fmh-dialog .fmh-actions{flex-direction:row;justify-content:flex-end;gap:8px;margin-top:10px}
+.fmh-upgrade-btn{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;font-size:11px;padding:0 4px}
+.fmh-upgrade-btn:hover{opacity:1;text-decoration:underline}
 `
 
 function ensureStyle() {
@@ -347,18 +359,29 @@ export function apply(ctx) {
     el('button', { type: 'button', onclick: saveSetup, text: STR.setupSave }),
   ])
 
-  const footEl = el('footer', { class: 'fmh-foot' },
-    cfg.footerLinks.map((l, i) => {
+  const upgradeBtn = el('button', {
+    class: 'fmh-upgrade-btn', type: 'button', text: STR.upgradeBtn,
+    onclick: () => checkUpgrade(),
+  })
+  const footEl = el('footer', { class: 'fmh-foot' }, [
+    ...cfg.footerLinks.map((l, i) => {
       const link = el('a', { href: l.url, target: '_blank', rel: 'noopener noreferrer', text: l.label })
       return i === 0 ? link : [el('span', { class: 'fmh-dots', text: '·' }), link]
     }),
-  )
+    el('span', { class: 'fmh-dots', text: '·' }),
+    upgradeBtn,
+  ])
 
   const batchBtn = el('button', {
     class: 'fmh-btn-batch', type: 'button', text: STR.batchBtn,
     onclick: () => batchApplyAll(),
   })
-  const batchBar = el('div', { class: 'fmh-batch-bar' }, [batchBtn])
+  const refreshBtn = el('button', {
+    class: 'fmh-btn-batch', type: 'button', text: STR.refreshBtn,
+    style: 'background:#34c77b',
+    onclick: () => { state.expanded.clear(); loadPage(state.page) },
+  })
+  const batchBar = el('div', { class: 'fmh-batch-bar' }, [batchBtn, refreshBtn])
 
   const bodyEl = el('div', { class: 'fmh-body' }, [setupBox, stateEl, batchBar, listEl, pagerEl, footEl])
   const root = el('section', { class: 'fmh-panel' }, [bodyEl])
@@ -398,7 +421,8 @@ export function apply(ctx) {
 
   function renderDetail(item) {
     const codeBase = el('code', { text: item.apiBase })
-    const codeModel = el('code', { text: item.modelId })
+    const modelsText = Array.isArray(item.modelIds) ? item.modelIds.join(', ') : item.modelId || ''
+    const codeModel = el('code', { text: modelsText, title: modelsText })
     const keyBtn = item.keyUrl
       ? el('a', { class: 'fmh-btn fmh-btn-key', href: item.keyUrl, target: '_blank', rel: 'noopener noreferrer', text: `🔑 ${STR.keyBtn}` })
       : el('a', { class: 'fmh-btn fmh-btn-key', 'aria-disabled': 'true', style: 'opacity:.4;pointer-events:none', text: `🔑 ${STR.keyBtn}` })
@@ -418,7 +442,7 @@ export function apply(ctx) {
       ]),
       el('div', { class: 'fmh-field' }, [
         el('b', { text: STR.modelLabel }),
-        el('span', { class: 'fmh-code' }, [codeModel, el('button', { class: 'fmh-copy', type: 'button', title: 'copy', onclick: async () => toast(await copyText(item.modelId) ? STR.copied : STR.copyFail), text: '⧉' })]),
+        el('span', { class: 'fmh-code' }, [codeModel, el('button', { class: 'fmh-copy', type: 'button', title: 'copy', onclick: async () => toast(await copyText(modelsText) ? STR.copied : STR.copyFail), text: '⧉' })]),
       ]),
       el('div', { class: 'fmh-actions' }, [
         keyBtn,
@@ -590,7 +614,8 @@ export function apply(ctx) {
       prefix: cfg.providerIdPrefix,
       title: item.title,
       apiBase: item.apiBase,
-      modelId: item.modelId,
+      modelIds: item.modelIds,
+      rowId: item.id,
     })
     const bound = getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') { showFallbackDialog(pid, entry); return }
@@ -642,7 +667,8 @@ export function apply(ctx) {
       prefix: cfg.providerIdPrefix,
       title: item.title,
       apiBase: item.apiBase,
-      modelId: item.modelId,
+      modelIds: item.modelIds,
+      rowId: item.id,
     })
     const bound = getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') return { pid, ok: false }
@@ -686,7 +712,8 @@ export function apply(ctx) {
       prefix: cfg.providerIdPrefix,
       title: item.title,
       apiBase: item.apiBase,
-      modelId: item.modelId,
+      modelIds: item.modelIds,
+      rowId: item.id,
     })
     const hub = getBoundNamespace('free-models-hub')
     const lp = getBoundNamespace('llm-pi-ai')
@@ -742,29 +769,79 @@ export function apply(ctx) {
   async function batchApplyAll() {
     if (!state.data || !state.data.items.length) return
     const items = state.data.items
+    const bound = getBoundNamespace('llm-pi-ai')
+    if (!bound || typeof bound.set !== 'function') { toast(STR.proxyOffline, 'err'); return }
     batchBtn.disabled = true
     batchBtn.textContent = STR.batchApplying(items.length)
-    let ok = 0, fail = 0
-    for (const item of items) {
-      try { await applyProviderSilent(item); ok++ } catch { fail++ }
+    try {
+      const providers = readProviders(bound)
+      let count = 0
+      for (const item of items) {
+        const { pid, entry } = buildProviderEntry({
+          prefix: cfg.providerIdPrefix,
+          title: item.title,
+          apiBase: item.apiBase,
+          modelIds: item.modelIds,
+          rowId: item.id,
+        })
+        providers[pid] = entry
+        count++
+      }
+      await bound.set('providers', providers)
+      toast(STR.batchDone(count, 0), 'ok')
+    } catch (error) {
+      dbg('batch apply failed:', error && error.message)
+      toast(STR.batchDone(0, items.length), 'err')
+    } finally {
+      batchBtn.disabled = false
+      batchBtn.textContent = STR.batchBtn
     }
-    batchBtn.disabled = false
-    batchBtn.textContent = STR.batchBtn
-    toast(STR.batchDone(ok, fail), ok > 0 ? 'ok' : 'err')
   }
 
-  async function applyProviderSilent(item) {
-    const { pid, entry } = buildProviderEntry({
-      prefix: cfg.providerIdPrefix,
-      title: item.title,
-      apiBase: item.apiBase,
-      modelId: item.modelId,
-    })
-    const bound = getBoundNamespace('llm-pi-ai')
-    if (!bound || typeof bound.set !== 'function') throw new Error('no settings')
-    const providers = readProviders(bound)
-    providers[pid] = entry
-    await bound.set('providers', providers)
+  /* ---- upgrade check ---- */
+  const CURRENT_VERSION = '0.3.0'
+  const GITHUB_REPO = 'yu-wenchao/dsh-free-models-hub'
+  const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
+  const PROFILE_URL = 'https://github.com/' + GITHUB_REPO + '/releases/latest'
+
+  async function checkUpgrade() {
+    upgradeBtn.textContent = STR.upgradeChecking
+    try {
+      const res = await fetch(GITHUB_API, { headers: { Accept: 'application/vnd.github.v3+json' } })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      const latest = (data.tag_name || '').replace(/^v/, '')
+      if (!latest || latest === CURRENT_VERSION) {
+        toast(STR.upgradeLatest, 'ok')
+        upgradeBtn.textContent = STR.upgradeBtn
+        return
+      }
+      // Show upgrade dialog with download link
+      const close = () => overlay.remove()
+      const overlay = el('div', {
+        class: 'fmh-overlay',
+        onclick: (ev) => { if (ev.target === overlay) close() },
+      }, [el('div', { class: 'fmh-dialog', role: 'dialog', 'aria-modal': 'true' }, [
+        el('h3', { text: `发现新版本 v${latest}` }),
+        el('p', { text: `当前版本 v${CURRENT_VERSION} → v${latest}` }),
+        el('p', { text: '请到以下地址下载最新 release，解压后替换 plugins 目录中的 dsh-free-models-hub 文件夹：' }),
+        el('a', {
+          href: PROFILE_URL,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          text: PROFILE_URL,
+          style: 'color:#69b1ff;word-break:break-all',
+        }),
+        el('div', { class: 'fmh-actions' }, [
+          el('button', { class: 'fmh-btn fmh-btn-apply', type: 'button', onclick: close, text: STR.fallbackClose }),
+        ]),
+      ])])
+      document.body.appendChild(overlay)
+    } catch (error) {
+      dbg('upgrade check failed:', error && error.message)
+      toast(STR.upgradeFailed, 'err')
+    }
+    upgradeBtn.textContent = STR.upgradeBtn
   }
 
   /* ---- mounting ---- */
