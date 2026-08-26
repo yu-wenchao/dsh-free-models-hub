@@ -719,11 +719,12 @@ export function apply(ctx) {
       } catch { /* best effort */ }
     }
 
-    // Rewrite baseURL to point to local proxy
+    // Rewrite baseURL to point to local proxy and remove apiKeyEnv (proxy handles auth)
     if (port && lp && typeof lp.set === 'function') {
       const providers = readProviders(lp)
       if (providers[pid]) {
-        providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
+        const { apiKeyEnv, ...rest } = providers[pid]
+        providers[pid] = { ...rest, baseURL: `http://127.0.0.1:${port}/p/${pid}` }
         await lp.set('providers', providers)
       }
       toast(STR.poolSaved(keys.length), 'ok')
@@ -755,7 +756,7 @@ export function apply(ctx) {
         if (lp && typeof lp.set === 'function') {
           const providers = readProviders(lp)
           if (providers[pid]) {
-            providers[pid] = { ...providers[pid], baseURL: orig }
+            providers[pid] = { ...providers[pid], baseURL: orig, apiKeyEnv: apiKeyEnvName(pid) }
             await lp.set('providers', providers)
           }
         }
