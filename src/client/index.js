@@ -662,13 +662,14 @@ export function apply(ctx) {
   }
 
   /* ---- multi-key pool ---- */
-  async function writeProviderEnsure(item) {
+  async function writeProviderEnsure(item, noAuth) {
     const { pid, entry } = buildProviderEntry({
       prefix: cfg.providerIdPrefix,
       title: item.title,
       apiBase: item.apiBase,
       modelIds: item.modelIds,
       rowId: item.id,
+      noAuth,
     })
     const bound = getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') return { pid, ok: false }
@@ -683,7 +684,7 @@ export function apply(ctx) {
   }
 
   async function saveKeyPool(item, keys) {
-    const { pid, ok } = await writeProviderEnsure(item)
+    const { pid, ok } = await writeProviderEnsure(item, true)
     if (!ok) { toast(STR.proxyOffline, 'err'); return }
 
     // Save to settings scope (live, in-memory)
@@ -719,12 +720,11 @@ export function apply(ctx) {
       } catch { /* best effort */ }
     }
 
-    // Rewrite baseURL to point to local proxy and remove apiKeyEnv (proxy handles auth)
+    // Rewrite baseURL to point to local proxy
     if (port && lp && typeof lp.set === 'function') {
       const providers = readProviders(lp)
       if (providers[pid]) {
-        const { apiKeyEnv, ...rest } = providers[pid]
-        providers[pid] = { ...rest, baseURL: `http://127.0.0.1:${port}/p/${pid}` }
+        providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
         await lp.set('providers', providers)
       }
       toast(STR.poolSaved(keys.length), 'ok')
