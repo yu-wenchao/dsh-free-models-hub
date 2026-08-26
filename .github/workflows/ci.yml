@@ -47,10 +47,20 @@ jobs:
 
       - name: Backend smoke (clean URLs, front controller)
         run: |
-          php -S 127.0.0.1:8098 -t server-php server-php/index.php >/dev/null 2>&1 &
-          sleep 2
+          php -S 127.0.0.1:8098 -t server-php server-php/index.php >php-server.log 2>&1 &
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null "http://127.0.0.1:8098/api/models"; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::backend server did not start"
+            cat php-server.log
+            exit 1
+          fi
           curl -fsS "http://127.0.0.1:8098/" | grep -q '免费模型榜'
           curl -fsS "http://127.0.0.1:8098/api/models?page=1&page_size=10" | grep -q '"ok":true'
           code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:8098/includes/config.php")
+          echo "stealth probe /includes/config.php -> $code (expect 404)"
           test "$code" = "404"
           echo "Clean-URL smoke OK"
