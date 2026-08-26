@@ -41,7 +41,9 @@ export function apply(ctx, config = {}) {
   let sectionSource = () => ({ keyPools: {}, targets: {} })
 
   // ---- file-based pool fallback (when settings section registration fails) ----
-  const poolFilePath = join(process.cwd(), 'dsh-free-models-hub-keypools.json')
+  // Write to a fixed, predictable location so the user can find/edit it.
+  const dshHome = process.env.DSH_HOME || join(process.cwd(), '..')
+  const poolFilePath = join(dshHome, 'dsh-free-models-hub-keypools.json')
   let filePools = {}
   let fileTargets = {}
 
