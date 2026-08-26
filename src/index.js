@@ -19,9 +19,20 @@ import {
 import http from 'node:http'
 import https from 'node:https'
 import fs from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 export const name = 'free-models-hub'
+
+// ---- Discover DSH_HOME from the plugin's own install path ----
+//   <DSH_HOME>/profiles/web/node_modules/<pkg>/lib/index.js  →  go up 6 dirs
+let dshHome = ''
+try {
+  const here = fileURLToPath(import.meta.url)
+  dshHome = join(here, '..', '..', '..', '..', '..', '..')
+} catch {
+  dshHome = process.cwd()
+}
 
 function log(debug, ...args) {
   if (debug) console.log(LOG_PREFIX, ...args)
@@ -41,8 +52,6 @@ export function apply(ctx, config = {}) {
   let sectionSource = () => ({ keyPools: {}, targets: {} })
 
   // ---- file-based pool fallback (when settings section registration fails) ----
-  // Write to a fixed, predictable location so the user can find/edit it.
-  const dshHome = process.env.DSH_HOME || 'D:\\dsharness\\dsh-home'
   const poolFilePath = join(dshHome, 'dsh-free-models-hub-keypools.json')
   let filePools = {}
   let fileTargets = {}
