@@ -42,7 +42,7 @@ export function apply(ctx, config = {}) {
 
   // ---- file-based pool fallback (when settings section registration fails) ----
   // Write to a fixed, predictable location so the user can find/edit it.
-  const dshHome = process.env.DSH_HOME || join(process.cwd(), '..')
+  const dshHome = process.env.DSH_HOME || 'D:\\dsharness\\dsh-home'
   const poolFilePath = join(dshHome, 'dsh-free-models-hub-keypools.json')
   let filePools = {}
   let fileTargets = {}
@@ -53,10 +53,10 @@ export function apply(ctx, config = {}) {
         const raw = JSON.parse(fs.readFileSync(poolFilePath, 'utf8'))
         filePools = raw.keyPools || {}
         fileTargets = raw.targets || {}
-        log(cfg.debug, `loaded key pools from ${poolFilePath}`)
+        console.log(LOG_PREFIX, `loaded key pools from ${poolFilePath} (${Object.keys(filePools).length} providers)`)
       }
     } catch (err) {
-      log(cfg.debug, 'pool file read failed:', err && err.message)
+      console.warn(LOG_PREFIX, 'pool file read failed:', err && err.message)
     }
   }
 
@@ -65,9 +65,9 @@ export function apply(ctx, config = {}) {
       fs.writeFileSync(poolFilePath, JSON.stringify({ keyPools: pools, targets }, null, 2), 'utf8')
       filePools = pools
       fileTargets = targets
-      log(cfg.debug, `saved key pools to ${poolFilePath}`)
+      console.log(LOG_PREFIX, `saved key pools to ${poolFilePath} (${Object.keys(pools).length} providers)`)
     } catch (err) {
-      warn('pool file write failed:', err && err.message)
+      console.warn(LOG_PREFIX, 'pool file write failed:', err && err.message)
     }
   }
 
@@ -97,14 +97,17 @@ export function apply(ctx, config = {}) {
       return
     }
 
-    // save pools from client (POST /p/save-pools)
+    // save pools from client (POST /p/save-pools) — merges with existing
     if (pid === 'p' && rest === 'save-pools' && req.method === 'POST') {
       let body = ''
       req.on('data', (chunk) => { body += chunk })
       req.on('end', () => {
         try {
           const data = JSON.parse(body)
-          writePoolFile(data.keyPools || {}, data.targets || {})
+          readPoolFile()
+          const mergedPools = { ...filePools, ...(data.keyPools || {}) }
+          const mergedTargets = { ...fileTargets, ...(data.targets || {}) }
+          writePoolFile(mergedPools, mergedTargets)
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ ok: true }))
         } catch {
@@ -112,6 +115,14 @@ export function apply(ctx, config = {}) {
           res.end(JSON.stringify({ error: 'invalid json' }))
         }
       })
+      return
+    }
+
+    // load pools from file (GET /p/load-pools) — allows client to read saved pools
+    if (pid === 'p' && rest === 'load-pools') {
+      readPoolFile()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ keyPools: filePools, targets: fileTargets }))
       return
     }
 
@@ -179,6 +190,10 @@ export function apply(ctx, config = {}) {
   }
 
   function startProxy(port) {
+    // Ensure pool file exists on disk before starting
+    if (!fs.existsSync(poolFilePath)) {
+      writePoolFile({}, {})
+    }
     const server = http.createServer(handleProxy)
     server.on('error', (err) => {
       if (err && err.code === 'EADDRINUSE' && port < cfg.proxyPort + 20) {
@@ -191,7 +206,7 @@ export function apply(ctx, config = {}) {
     server.listen(port, '127.0.0.1', () => {
       actualPort = port
       proxyServer = server
-      log(cfg.debug, `rotation proxy listening on 127.0.0.1:${port}`)
+      console.log(LOG_PREFIX, `rotation proxy listening on 127.0.0.1:${port} (pool file: ${poolFilePath})`)
     })
   }
   startProxy(cfg.proxyPort)

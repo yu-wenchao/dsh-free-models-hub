@@ -686,10 +686,10 @@ export function apply(ctx) {
     const { pid, ok } = await writeProviderEnsure(item)
     if (!ok) { toast(STR.proxyOffline, 'err'); return }
 
-    // Try settings scope first, fall back to proxy file API
+    // Save to settings scope (live, in-memory)
     const hub = getBoundNamespace('free-models-hub')
     const lp = getBoundNamespace('llm-pi-ai')
-    let savedViaSettings = false
+    let poolsSaved = false
 
     if (hub && typeof hub.set === 'function') {
       try {
@@ -699,35 +699,27 @@ export function apply(ctx) {
         targets[pid] = item.apiBase
         await hub.set('keyPools', pools)
         await hub.set('targets', targets)
-        savedViaSettings = true
-      } catch { /* fall through to file API */ }
+        poolsSaved = true
+      } catch { /* fall through */ }
     }
 
-    if (!savedViaSettings) {
-      // Write pools to proxy file via POST
-      const port = await probeProxy()
-      if (port) {
-        try {
-          // Read existing pools from proxy
-          const existing = await fetch(`http://127.0.0.1:${port}/p/ping`, { mode: 'cors' }).then(() => true).catch(() => false)
-          if (existing) {
-            // Merge with any existing file-based pools (read from a known key)
-            const mergedPools = {}
-            const mergedTargets = {}
-            mergedPools[pid] = keys
-            mergedTargets[pid] = item.apiBase
-            await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
-            })
-          }
-        } catch { /* best effort */ }
-      }
-    }
-
-    // Probe for running proxy and rewrite baseURL
+    // Also persist to proxy file (survives restart)
     const port = await probeProxy()
+    if (port) {
+      try {
+        const existingRes = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' }).catch(() => null)
+        const existing = existingRes && existingRes.ok ? await existingRes.json().catch(() => ({})) : {}
+        const mergedPools = { ...(existing.keyPools || {}), [pid]: keys }
+        const mergedTargets = { ...(existing.targets || {}), [pid]: item.apiBase }
+        await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
+        })
+      } catch { /* best effort */ }
+    }
+
+    // Rewrite baseURL to point to local proxy
     if (port && lp && typeof lp.set === 'function') {
       const providers = readProviders(lp)
       if (providers[pid]) {
@@ -736,7 +728,6 @@ export function apply(ctx) {
       }
       toast(STR.poolSaved(keys.length), 'ok')
     } else {
-      // Proxy not running — still saved provider, just no rotation
       toast(STR.poolSaved(keys.length) + '（代理未启动，轮换暂不可用，需重启 DSH）', 'ok')
     }
   }
@@ -774,10 +765,12 @@ export function apply(ctx) {
     const port = await probeProxy()
     if (port) {
       try {
-        const mergedPools = {}
-        const mergedTargets = {}
-        mergedPools[pid] = []
-        mergedTargets[pid] = ''
+        const existingRes = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' }).catch(() => null)
+        const existing = existingRes && existingRes.ok ? await existingRes.json().catch(() => ({})) : {}
+        const mergedPools = { ...(existing.keyPools || {}) }
+        const mergedTargets = { ...(existing.targets || {}) }
+        delete mergedPools[pid]
+        delete mergedTargets[pid]
         await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -980,6 +973,27 @@ export function apply(ctx) {
 
   const detachSlot = trySlotInjection()
   const detachDrawer = detachSlot ? null : installRightDrawer()
+
+  // Load saved key pools from proxy file on startup
+  ;(async () => {
+    const port = await probeProxy()
+    if (port) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' })
+        if (res.ok) {
+          const data = await res.json()
+          // Apply loaded pools to settings scope if available
+          const hub = getBoundNamespace('free-models-hub')
+          if (hub && typeof hub.set === 'function') {
+            if (data.keyPools && Object.keys(data.keyPools).length) {
+              await hub.set('keyPools', data.keyPools)
+              await hub.set('targets', data.targets || {})
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  })()
 
   ctx.effect(() => () => {
     seq++ // invalidate in-flight requests
