@@ -80,6 +80,19 @@ const STR = Object.freeze({
   upgradeDone: '升级完成，请重启',
   upgradeFailed: '升级失败',
   upgradeNoPermission: '升级需要本地代理支持',
+  guideBtn: '📖 使用教程',
+  guideClose: '收起教程',
+  guideTitle: '三步配置好一个免费模型',
+  /* Step 1: one-click apply */
+  guideStep1Title: '① 一键配置到 DSH',
+  guideStep1Body: '在下方模型列表点开任意一个模型，点击「一键配置到 DSH」（或顶部「⚡ 配置本页全部」一键批量添加本页全部模型）。配置器会把提供方写入 DSH 的「设置 → 模型」列表。',
+  /* Step 2: find provider + fill key */
+  guideStep2Title: '② 到「设置 → 模型」填 Key',
+  guideStep2Body: '打开 DSH 左侧「设置」→「模型」页，在「提供商」列表中找到刚写入的提供方（形如 freehub-xxx），展开后把你在本页「🔑 点击这里申请免费密钥key」拿到的 Key 粘贴到「API Key」输入框，点击「保存」。',
+  guideStep2Hint: '只有填好 Key 并保存，模型才能真正调用。若填写后报「no credential」或「API key is invalid」，回到提供方重新粘贴一次 Key 并保存。',
+  /* Step 3: use it */
+  guideStep3Title: '③ 开始使用',
+  guideStep3Body: '回到聊天页，在顶部模型选择器里切换到该提供方下的模型（glm-5.2、deepseek-v4-flash 等），即可免费对话。多行免费 Key 可点「🔄 多 Key 轮换」一次填入多条，由本地代理自动轮询。',
 })
 
 const DEFAULTS = Object.freeze({
@@ -309,6 +322,17 @@ button.fmh-btn-apply[disabled]{opacity:.55;cursor:wait}
 .fmh-dialog .fmh-actions{flex-direction:row;justify-content:flex-end;gap:8px;margin-top:10px}
 .fmh-upgrade-btn{background:none;border:none;color:inherit;opacity:.65;cursor:pointer;font-size:11px;padding:0 4px}
 .fmh-upgrade-btn:hover{opacity:1;text-decoration:underline}
+.fmh-guide{border:1px dashed #7b5cff66;border-radius:8px;padding:8px;background:rgba(123,92,255,.06)}
+.fmh-guide-head{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.fmh-guide-btn{background:none;border:none;color:inherit;cursor:pointer;font-size:11.5px;padding:3px 6px;border-radius:6px;opacity:.85}
+.fmh-guide-btn:hover{opacity:1;background:rgba(123,92,255,.15)}
+.fmh-guide-title{font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px}
+.fmh-guide-body{display:none;flex-direction:column;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--fmh-line)}
+.fmh-guide-body.open{display:flex}
+.fmh-guide-step{display:flex;flex-direction:column;gap:3px;font-size:11px}
+.fmh-guide-step b{font-weight:600;color:#cdbaff}
+.fmh-guide-step p{margin:0;opacity:.85;line-height:1.55}
+.fmh-guide-step .fmh-guide-tip{opacity:.7;background:rgba(255,209,102,.08);border-radius:6px;padding:4px 6px}
 `
 
 function ensureStyle() {
@@ -383,7 +407,43 @@ export function apply(ctx) {
   })
   const batchBar = el('div', { class: 'fmh-batch-bar' }, [batchBtn, refreshBtn])
 
-  const bodyEl = el('div', { class: 'fmh-body' }, [setupBox, stateEl, batchBar, listEl, pagerEl, footEl])
+  /* ---- guide / tutorial ---- */
+  const guideBody = el('div', { class: 'fmh-guide-body' }, [
+    el('div', { class: 'fmh-guide-step' }, [
+      el('b', { text: STR.guideStep1Title }),
+      el('p', { text: STR.guideStep1Body }),
+    ]),
+    el('div', { class: 'fmh-guide-step' }, [
+      el('b', { text: STR.guideStep2Title }),
+      el('p', { text: STR.guideStep2Body }),
+      el('div', { class: 'fmh-guide-tip', text: STR.guideStep2Hint }),
+    ]),
+    el('div', { class: 'fmh-guide-step' }, [
+      el('b', { text: STR.guideStep3Title }),
+      el('p', { text: STR.guideStep3Body }),
+    ]),
+  ])
+  const guideBtn = el('button', { class: 'fmh-guide-btn', type: 'button', text: STR.guideBtn })
+  const guideEl = el('div', { class: 'fmh-guide' }, [
+    el('div', { class: 'fmh-guide-head' }, [
+      el('span', { class: 'fmh-guide-title', text: '📖 使用教程' }),
+      guideBtn,
+    ]),
+    guideBody,
+  ])
+  let guideOpen = false
+  function toggleGuide(force) {
+    guideOpen = force !== undefined ? force : !guideOpen
+    guideBody.classList.toggle('open', guideOpen)
+    guideBtn.textContent = guideOpen ? STR.guideClose : STR.guideBtn
+    try { localStorage.setItem('fmh:guideOpen', guideOpen ? '1' : '0') } catch { /* ignore */ }
+  }
+  guideBtn.addEventListener('click', () => toggleGuide())
+  let guideInitial = false
+  try { guideInitial = localStorage.getItem('fmh:guideOpen') === '1' } catch { /* ignore */ }
+  if (guideInitial) toggleGuide(true)
+
+  const bodyEl = el('div', { class: 'fmh-body' }, [setupBox, guideEl, stateEl, batchBar, listEl, pagerEl, footEl])
   const root = el('section', { class: 'fmh-panel' }, [bodyEl])
   document.body.appendChild(toastWrap)
 
@@ -568,7 +628,7 @@ export function apply(ctx) {
   }
 
   /* ---- provider write ---- */
-  function getBoundNamespace(namespace) {
+  async function getBoundNamespace(namespace) {
     try {
       const scope = ctx && ctx.settingsScope
       if (scope && typeof scope.bind === 'function') return scope.bind({ namespace })
@@ -578,9 +638,25 @@ export function apply(ctx) {
     return null
   }
 
-  function readProviders(bound) {
+  // Read existing providers from the DSH namespace scope.
+  // settingsScope binds a SettingsScopeController whose getSnapshot() exposes
+  // { value, base, user, revision }. `value` is the decoded namespace object
+  // (the whole llm-pi-ai section, including providers). Await load() so the
+  // initial host read has completed before we look at the snapshot.
+  async function readProviders(bound) {
+    if (!bound) return {}
     try {
-      const v = bound && (bound.value || bound.base || bound)
+      if (typeof bound.load === 'function') {
+        await bound.load().catch(() => {})
+      }
+      let v = null
+      if (typeof bound.getSnapshot === 'function') {
+        const snap = bound.getSnapshot()
+        v = (snap && (snap.value || snap.base)) || null
+      }
+      if ((!v || typeof v !== 'object') && (bound.value || bound.base)) {
+        v = bound.value || bound.base
+      }
       const providers = v && v.providers
       return providers && typeof providers === 'object' ? { ...providers } : {}
     } catch {
@@ -617,19 +693,18 @@ export function apply(ctx) {
       modelIds: item.modelIds,
       rowId: item.id,
     })
-    const bound = getBoundNamespace('llm-pi-ai')
+    const bound = await getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') { showFallbackDialog(pid, entry); return }
     try {
-      const providers = readProviders(bound)
+      // Read existing providers (awaits host load), merge new one, write back.
+      const providers = await readProviders(bound)
+      if (providers[pid]) {
+        toast(STR.applied(pid), 'ok')
+        return
+      }
       providers[pid] = entry
       await bound.set('providers', providers)
-      // Verify on the SAME bound scope; a mismatch sends the user the manual path.
-      const after = readProviders(bound)
-      if (after[pid] && after[pid].baseURL === entry.baseURL) {
-        toast(STR.applied(pid), 'ok')
-      } else {
-        showFallbackDialog(pid, entry)
-      }
+      toast(STR.applied(pid), 'ok')
     } catch (error) {
       dbg('provider write failed:', error && error.message)
       showFallbackDialog(pid, entry)
@@ -655,7 +730,18 @@ export function apply(ctx) {
   /* ---- readField helpers ---- */
   function readField(bound, key, fallback) {
     try {
-      const v = bound && (bound.value || bound.base || bound)
+      let v = bound && (bound.value || bound.base || bound)
+    if (!v || typeof v !== 'object' || !('providers' in v)) {
+      let snap = null
+      if (bound && typeof bound.getSnapshot === 'function') { try { snap = bound.getSnapshot() } catch (_) { snap = null } }
+      if (snap && typeof snap === 'object') {
+        v = (snap.user && typeof snap.user === 'object') ? snap.user
+          : (snap.value && typeof snap.value === 'object') ? snap.value
+          : (snap.base && typeof snap.base === 'object') ? snap.base
+          : ('providers' in snap ? snap : v)
+      }
+      if (!v || typeof v !== 'object') v = {}
+    }
       const val = v && v[key]
       return val && typeof val === 'object' ? { ...val } : { ...fallback }
     } catch { return { ...fallback } }
@@ -670,16 +756,16 @@ export function apply(ctx) {
       modelIds: item.modelIds,
       rowId: item.id,
     })
-    const bound = getBoundNamespace('llm-pi-ai')
+    const bound = await getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') return { pid, ok: false }
     try {
-      const providers = readProviders(bound)
-      providers[pid] = entry
-      await bound.set('providers', providers)
+      const providers = await readProviders(bound)
+      if (!providers[pid]) {
+        providers[pid] = entry
+        await bound.set('providers', providers)
+      }
       return { pid, ok: true }
-    } catch {
-      return { pid, ok: false }
-    }
+    } catch { return { pid, ok: false } }
   }
 
   async function saveKeyPool(item, keys) {
@@ -687,8 +773,8 @@ export function apply(ctx) {
     if (!ok) { toast(STR.proxyOffline, 'err'); return }
 
     // Save to settings scope (live, in-memory)
-    const hub = getBoundNamespace('free-models-hub')
-    const lp = getBoundNamespace('llm-pi-ai')
+    const hub = await getBoundNamespace('free-models-hub')
+    const lp = await getBoundNamespace('llm-pi-ai')
     let poolsSaved = false
 
     if (hub && typeof hub.set === 'function') {
@@ -708,7 +794,11 @@ export function apply(ctx) {
     if (port) {
       try {
         const existingRes = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' }).catch(() => null)
-        const existing = existingRes && existingRes.ok ? await existingRes.json().catch(() => ({})) : {}
+        if (!existingRes || !existingRes.ok) {
+          toast(STR.proxyOffline, 'err')
+          return
+        }
+        const existing = await existingRes.json().catch(() => ({}))
         const mergedPools = { ...(existing.keyPools || {}), [pid]: keys }
         const mergedTargets = { ...(existing.targets || {}), [pid]: item.apiBase }
         await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
@@ -719,13 +809,18 @@ export function apply(ctx) {
       } catch { /* best effort */ }
     }
 
-    // Rewrite baseURL to point to local proxy
-    if (port && lp && typeof lp.set === 'function') {
-      const providers = readProviders(lp)
-      if (providers[pid]) {
-        providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
-        await lp.set('providers', providers)
-      }
+    // Rewrite only this provider's baseURL to proxy (immediate, DSH in-memory)
+    if (port) {
+      try {
+        const bound = await getBoundNamespace('llm-pi-ai')
+        if (bound && typeof bound.set === 'function') {
+          const allProviders = await readProviders(bound)
+          if (allProviders[pid]) {
+            allProviders[pid] = { ...allProviders[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
+            await bound.set('providers', allProviders)
+          }
+        }
+      } catch { /* best effort */ }
       toast(STR.poolSaved(keys.length), 'ok')
     } else {
       toast(STR.poolSaved(keys.length) + '（代理未启动，轮换暂不可用，需重启 DSH）', 'ok')
@@ -740,25 +835,17 @@ export function apply(ctx) {
       modelIds: item.modelIds,
       rowId: item.id,
     })
-    const hub = getBoundNamespace('free-models-hub')
-    const lp = getBoundNamespace('llm-pi-ai')
+    const hub = await getBoundNamespace('free-models-hub')
+    const lp = await getBoundNamespace('llm-pi-ai')
     // Clear from settings scope
     if (hub && typeof hub.set === 'function') {
       try {
         const pools = readField(hub, 'keyPools', {})
         const targets = readField(hub, 'targets', {})
-        const orig = targets[pid] || item.apiBase
         delete pools[pid]
         delete targets[pid]
         await hub.set('keyPools', pools)
         await hub.set('targets', targets)
-        if (lp && typeof lp.set === 'function') {
-          const providers = readProviders(lp)
-          if (providers[pid]) {
-            providers[pid] = { ...providers[pid], baseURL: orig, apiKeyEnv: apiKeyEnvName(pid) }
-            await lp.set('providers', providers)
-          }
-        }
       } catch { /* best effort */ }
     }
     // Also clear from file-based pools via proxy
@@ -766,26 +853,31 @@ export function apply(ctx) {
     if (port) {
       try {
         const existingRes = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' }).catch(() => null)
-        const existing = existingRes && existingRes.ok ? await existingRes.json().catch(() => ({})) : {}
-        const mergedPools = { ...(existing.keyPools || {}) }
-        const mergedTargets = { ...(existing.targets || {}) }
-        delete mergedPools[pid]
-        delete mergedTargets[pid]
-        await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
-        })
+        if (existingRes && existingRes.ok) {
+          const existing = await existingRes.json().catch(() => ({}))
+          const mergedPools = { ...(existing.keyPools || {}) }
+          const mergedTargets = { ...(existing.targets || {}) }
+          delete mergedPools[pid]
+          delete mergedTargets[pid]
+          await fetch(`http://127.0.0.1:${port}/p/save-pools`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keyPools: mergedPools, targets: mergedTargets }),
+          })
+        }
       } catch { /* best effort */ }
     }
-    // Restore original baseURL in provider
-    if (lp && typeof lp.set === 'function') {
-      const providers = readProviders(lp)
-      if (providers[pid]) {
-        providers[pid] = { ...providers[pid], baseURL: item.apiBase }
-        await lp.set('providers', providers)
+    // Restore original baseURL via settingsScope
+    try {
+      const bound = await getBoundNamespace('llm-pi-ai')
+      if (bound && typeof bound.set === 'function') {
+        const allProviders = await readProviders(bound)
+        if (allProviders[pid]) {
+          allProviders[pid] = { ...allProviders[pid], baseURL: item.apiBase }
+          await bound.set('providers', allProviders)
+        }
       }
-    }
+    } catch { /* best effort */ }
     toast(STR.poolCleared, 'ok')
   }
 
@@ -821,12 +913,13 @@ export function apply(ctx) {
   async function batchApplyAll() {
     if (!state.data || !state.data.items.length) return
     const items = state.data.items
-    const bound = getBoundNamespace('llm-pi-ai')
+    const bound = await getBoundNamespace('llm-pi-ai')
     if (!bound || typeof bound.set !== 'function') { toast(STR.proxyOffline, 'err'); return }
     batchBtn.disabled = true
     batchBtn.textContent = STR.batchApplying(items.length)
     try {
-      const providers = readProviders(bound)
+      // Read existing providers (awaits host load), merge new ones, write back.
+      const providers = await readProviders(bound)
       let count = 0
       for (const item of items) {
         const { pid, entry } = buildProviderEntry({
@@ -836,10 +929,11 @@ export function apply(ctx) {
           modelIds: item.modelIds,
           rowId: item.id,
         })
+        if (providers[pid]) continue
         providers[pid] = entry
         count++
       }
-      await bound.set('providers', providers)
+      if (count > 0) await bound.set('providers', providers)
       toast(STR.batchDone(count, 0), 'ok')
     } catch (error) {
       dbg('batch apply failed:', error && error.message)
@@ -975,24 +1069,35 @@ export function apply(ctx) {
   const detachDrawer = detachSlot ? null : installRightDrawer()
 
   // Load saved key pools from proxy file on startup
+  // Fix provider baseURLs to point to proxy for providers with key pools
   ;(async () => {
     const port = await probeProxy()
-    if (port) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' })
-        if (res.ok) {
-          const data = await res.json()
-          // Apply loaded pools to settings scope if available
-          const hub = getBoundNamespace('free-models-hub')
-          if (hub && typeof hub.set === 'function') {
-            if (data.keyPools && Object.keys(data.keyPools).length) {
-              await hub.set('keyPools', data.keyPools)
-              await hub.set('targets', data.targets || {})
+    if (!port) return
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/p/load-pools`, { mode: 'cors', credentials: 'omit' })
+      if (!res.ok) return
+      const data = await res.json()
+      const hub = await getBoundNamespace('free-models-hub')
+      if (hub && typeof hub.set === 'function' && data.keyPools && Object.keys(data.keyPools).length) {
+        await hub.set('keyPools', data.keyPools)
+        await hub.set('targets', data.targets || {})
+      }
+      // Fix provider baseURLs: read from DSH scope, update in-memory, write back
+      if (data.keyPools && Object.keys(data.keyPools).length) {
+        const lp = await getBoundNamespace('llm-pi-ai')
+        if (lp && typeof lp.set === 'function') {
+          const providers = await readProviders(lp)
+          let changed = false
+          for (const pid of Object.keys(data.keyPools)) {
+            if (providers[pid] && !String(providers[pid].baseURL || '').includes(`/p/${pid}`)) {
+              providers[pid] = { ...providers[pid], baseURL: `http://127.0.0.1:${port}/p/${pid}` }
+              changed = true
             }
           }
+          if (changed) await lp.set('providers', providers)
         }
-      } catch { /* ignore */ }
-    }
+      }
+    } catch { /* ignore */ }
   })()
 
   ctx.effect(() => () => {

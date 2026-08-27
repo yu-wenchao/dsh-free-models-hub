@@ -60,6 +60,8 @@ export function apply(ctx, config = {}) {
   // section (setSource) once it installs; falls back to boot config until then.
   let sectionSource = () => ({ keyPools: {}, targets: {} })
 
+  // (YAML settings-file read/write removed — provider writes go through DSH settingsScope)
+
   // ---- file-based pool fallback (when settings section registration fails) ----
   const poolFilePath = join(dshHome, 'dsh-free-models-hub-keypools.json')
   let filePools = {}
@@ -72,6 +74,13 @@ export function apply(ctx, config = {}) {
         filePools = raw.keyPools || {}
         fileTargets = raw.targets || {}
         console.log(LOG_PREFIX, `loaded key pools from ${poolFilePath} (${Object.keys(filePools).length} providers)`)
+        // Set dummy env vars for all pooled providers so DSH credential check passes
+        for (const [pid, keys] of Object.entries(filePools)) {
+          if (Array.isArray(keys) && keys.length > 0) {
+            const envName = pid.replace(/-/g, '_').toUpperCase() + '_API_KEY'
+            if (!process.env[envName]) process.env[envName] = 'dsh-proxy-pool'
+          }
+        }
       }
     } catch (err) {
       console.warn(LOG_PREFIX, 'pool file read failed:', err && err.message)
@@ -80,6 +89,13 @@ export function apply(ctx, config = {}) {
 
   function writePoolFile(pools, targets) {
     try {
+      if (Object.keys(pools).length === 0 && fs.existsSync(poolFilePath)) {
+        const diskPools = JSON.parse(fs.readFileSync(poolFilePath, 'utf8')).keyPools || {}
+        if (Object.keys(diskPools).length > 0) {
+          console.warn(LOG_PREFIX, 'refusing to replace non-empty pool file with empty; keeping existing pools')
+          return
+        }
+      }
       fs.writeFileSync(poolFilePath, JSON.stringify({ keyPools: pools, targets }, null, 2), 'utf8')
       filePools = pools
       fileTargets = targets
@@ -104,6 +120,7 @@ export function apply(ctx, config = {}) {
   let actualPort = cfg.proxyPort
 
   function handleProxy(req, res) {
+    console.log(LOG_PREFIX, `REQUEST: ${req.method} ${req.url}`)
     // CORS for browser probes (panel ping / pool-check).
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -150,6 +167,17 @@ export function apply(ctx, config = {}) {
       return
     }
 
+    // read providers from settings.yaml  GET /p/read-providers
+    // (removed — provider read/write goes through DSH settingsScope, not the
+    //  yaml file; editing settings.yaml directly corrupted it. Reserved.)
+
+    // merge provider into settings.yaml  POST /p/save-provider
+    // (removed — see read-providers note)
+
+    // batch merge providers into settings.yaml  POST /p/save-providers-batch
+    // (removed — see read-providers note)
+
+
     // ---- proxy request: /p/<pid>/<api-path...> ----
     // action = provider id, rest = api path
     if (ns !== 'p' || !action || !rest) {
@@ -175,14 +203,13 @@ export function apply(ctx, config = {}) {
     }
 
     const target = targetBase.replace(/\/+$/, '') + '/' + rest + url.search
+    console.log(LOG_PREFIX, `proxy ${pid}: ${req.method} ${target}`)
     const upHeaders = { ...req.headers }
     delete upHeaders.host
     delete upHeaders.connection
-    delete upHeaders['content-length']
-    delete upHeaders['transfer-encoding']
 
-    // Round-robin key rotation when a pool is configured; otherwise pass
-    // through whatever Authorization the inbound request already carries.
+    // Round-robin key rotation when a pool is configured
+    const pool = pools[pid]
     const keyPool = Array.isArray(pool) ? pool.filter((k) => typeof k === 'string' && k.trim()) : []
     if (keyPool.length > 0) {
       if (!counters.has(pid)) counters.set(pid, { count: 0 })
@@ -206,25 +233,35 @@ export function apply(ctx, config = {}) {
     const isHttps = parsed.protocol === 'https:'
     const upstream = isHttps ? https : http
 
-    const proxyReq = upstream.request(opts, (proxyRes) => {
-      try {
-        const fwdHeaders = { ...proxyRes.headers }
-        delete fwdHeaders['transfer-encoding']
-        res.writeHead(proxyRes.statusCode, fwdHeaders)
-        proxyRes.pipe(res)
-      } catch (err) {
-        try { res.writeHead(502); res.end('proxy pipe error') } catch {}
-      }
-    })
-    proxyReq.on('error', (err) => {
-      console.warn(LOG_PREFIX, 'upstream error:', err && err.message)
-      try { if (!res.headersSent) res.writeHead(502); res.end('upstream error') } catch {}
+    // Read full request body first, then forward to upstream
+    const chunks = []
+    req.on('data', (chunk) => chunks.push(chunk))
+    req.on('end', () => {
+      const body = Buffer.concat(chunks)
+      // Set correct content-length for upstream
+      opts.headers['content-length'] = body.length
+      delete opts.headers['transfer-encoding']
+
+      const proxyReq = upstream.request(opts, (proxyRes) => {
+        try {
+          const fwdHeaders = { ...proxyRes.headers }
+          delete fwdHeaders['connection']
+          res.writeHead(proxyRes.statusCode, fwdHeaders)
+          proxyRes.pipe(res)
+        } catch (err) {
+          try { res.writeHead(502); res.end('proxy pipe error') } catch {}
+        }
+      })
+      proxyReq.on('error', (err) => {
+        console.warn(LOG_PREFIX, 'upstream error:', err && err.message)
+        try { if (!res.headersSent) res.writeHead(502); res.end('upstream error') } catch {}
+      })
+      proxyReq.write(body)
+      proxyReq.end()
     })
     req.on('error', (err) => {
       console.warn(LOG_PREFIX, 'client error:', err && err.message)
-      try { proxyReq.destroy() } catch {}
     })
-    req.pipe(proxyReq)
   }
 
   function startProxy(port) {
