@@ -41,6 +41,18 @@
     "engines":  {
                     "node":  "\u003e=18"
                 },
+    "peerDependencies":  {
+                            "@deepseek-ai/dsh-settings":  "*",
+                            "@deepseek-ai/schemastery":  "*"
+                        },
+    "peerDependenciesMeta":  {
+                                "@deepseek-ai/dsh-settings":  {
+                                                                   "optional":  true
+                                                               },
+                                "@deepseek-ai/schemastery":  {
+                                                                 "optional":  true
+                                                             }
+                            },
     "dsh":  {
                 "bundle":  {
                                "patch":  "./cordis.patch.yml"
