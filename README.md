@@ -38,7 +38,7 @@ https://github.com/yu-wenchao/dsh-free-models-hub/blob/main/one-click-install/RE
 
 <img width="1440" height="837" alt="image" src="https://github.com/user-attachments/assets/e28ca1f0-8625-4674-bdb8-f95e1d4fd06b" />
 
-<img width="349" height="825" alt="image" src="https://github.com/user-attachments/assets/e1b74a9d-44a1-4cff-9abc-b0f675ad10f5" /><img width="358" height="831" alt="image" src="https://github.com/user-attachments/assets/8d72997a-5776-474c-93f3-ed6f579011a0" />
+<img width="349" height="825" alt="image" src="https://github.com/user-attachments/assets/e1b74a9d-44a1-4cff-9abc-b0f675ad10f5" /><img width="1008" height="837" alt="image" src="https://github.com/user-attachments/assets/84217272-7a7b-4b44-8479-a85b09792fb1" />
 
 <img width="1440" height="837" alt="image" src="https://github.com/user-attachments/assets/580bbeb9-7062-4001-aad6-e2d3d6331185" />
 
