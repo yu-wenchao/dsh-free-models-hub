@@ -14,7 +14,6 @@ https://github.com/yu-wenchao/dsh-free-models-hub/blob/main/one-click-install/RE
 支持**一键配置** / **整页批量配置** 到 `设置 → 模型 → 自定义提供方` —— 用户只需自行粘贴免费 API Key。
 支持**多 Key 轮换**：同一模型粘贴多条免费 Key，由本地代理自动轮询，一个 Key 失效自动换下一个。
 
-数据由你自己的站点维护：内置 **PHP 7.4 + SQLite** 管理后台（单管理员、手工录入），
 插件通过只读 JSON API 拉取。**插件全程不接触用户 Key**（Key 只走 DSH 官方凭据通道）。
 
 ```
