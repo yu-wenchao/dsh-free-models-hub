@@ -1,0 +1,32 @@
+# dsh-free-models-hub bundle layer.
+# Rows here compose over @deepseek-ai/dsh-base and can be overridden by the
+# user's profile cordis.patch.yml (later layers win per row id).
+- insert:
+    - id: free-models-hub
+      name: dsh-free-models-hub
+      config:
+        # Data source operated by the plugin author. The panel works
+        # out of the box; override here only if you run your own backend.
+        backendUrl: 'https://free-api.gd7.cn'
+        # Items per page (server clamps to 1..50).
+        pageSize: 20
+        # Fetch timeout in milliseconds.
+        requestTimeoutMs: 10000
+        # Empty (default) = right-edge toggle button + slide-in drawer panel,
+        # identical on every DSH build. Set a slot name (e.g.
+        # sidebar.workspaces) only for in-sidebar mounting.
+        uiSlot: ''
+        # Prefix for generated provider ids written into llm-pi-ai.providers.
+        providerIdPrefix: freehub
+        # Local multi-key rotation proxy port (127.0.0.1 only).
+        proxyPort: 8787
+        # Fixed footer menu of the panel (http/https only).
+        footerLinks:
+          - label: 技术笔记
+            url: http://blog.4wc.cn
+          - label: 插件开发
+            url: https://blog.gd7.cn/
+          - label: 联系站长
+            url: http://web.wuyiyun.cn/
+        # Verbose logging.
+        debug: false

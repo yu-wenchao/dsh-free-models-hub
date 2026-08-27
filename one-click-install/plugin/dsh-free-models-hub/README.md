@@ -34,30 +34,12 @@
 
 ## 安装
 
-### 🚀 一键安装（推荐给不会命令行的用户）
-
-仓库内的 **[`one-click-install/`](one-click-install/)** 文件夹是免命令行的安装分发包，打包了 `plugin/` 插件本体，
-下载整个文件夹（或其中的 `dsh-free-models-hub-一键安装.zip`）后双击对应脚本即可，无需会敲命令、无需联网拉代码。
-
-| 你的使用方式 | 运行哪个脚本 | 说明 |
-|---|---|---|
-| **桌面版**（双击 exe） | `install-free-models-hub.bat` | 自动扫描本机 DSH 安装位置（含 `DSH_HOME`、`.dsh`、各盘 `dsh-home`），离线复制插件 + 自动注册，**小白首选** |
-| **命令行 / npx 版** | `install-npm-cli.bat` | 经 `dsh plugin --profile web add` + pnpm 安装（需本机能跑 `dsh` 和 `pnpm`） |
-| 卸载（任何方式） | `uninstall-free-models-hub.bat` | 一键移除插件及注册项 |
-
-> 安装脚本均已用真实 DSH 启动流程验证：插件会被正确加载进 profile 的 bundle 层（`loadProfile`/`composeEntries` 通过），
-> 支持「安装 → 卸载 → 重装」完整闭环。
-
-### 手动 / 命令行安装
-
 ```bash
-# 从 GitHub 源码安装（仓库已含预构建产物，安装不会触发 pnpm allowBuilds 构建许可）
 dsh plugin --profile web add github:yu-wenchao/dsh-free-models-hub
-# 或用本地分发包（one-click-install\plugin\dsh-free-models-hub）：
-dsh plugin --profile web add "one-click-install\plugin\dsh-free-models-hub"
 ```
 
 - 桌面版：在 DSH 的 **设置 → 插件中心 / 插件配置** 里添加 `dsh-free-models-hub`。
+- **预构建产物随仓库分发**，安装过程**不会触发 pnpm allowBuilds 构建许可**。
 - 固定版本：`dsh plugin --profile web add github:yu-wenchao/dsh-free-models-hub#v0.3.1`
 - 更新：再次执行同一条 add 命令即可；卸载：`dsh plugin --profile web remove dsh-free-models-hub`
 

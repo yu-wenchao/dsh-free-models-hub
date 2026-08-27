@@ -21,3 +21,6 @@ server-php/data/*.db-journal
 # local test artifacts
 tmp-*
 *.html.tmp
+
+# 本机完整备份（含 git bundle + 压缩包），体积大、仅供本地留存，不进仓库
+backup/
