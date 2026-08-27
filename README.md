@@ -1,5 +1,8 @@
 # dsh-free-models-hub
 
+一键安装说明书
+https://github.com/yu-wenchao/dsh-free-models-hub/blob/main/one-click-install/README-%E5%AE%89%E8%A3%85%E8%AF%B4%E6%98%8E.txt
+
 [English](#english) · [简体中文](#简体中文)
 
 <a id="简体中文"></a>
