@@ -34,12 +34,14 @@ https://github.com/yu-wenchao/dsh-free-models-hub/blob/main/one-click-install/RE
 │ 技术笔记·插件开发·联系站长│
 └──────────────────────────┘
 ```
+<img width="349" height="825" alt="image" src="https://github.com/user-attachments/assets/e1b74a9d-44a1-4cff-9abc-b0f675ad10f5" />
+
+
+<img width="360" height="837" alt="image" src="https://github.com/user-attachments/assets/0fd2af9f-126b-4a5a-8ff7-a45372891d42" />
+
 <img width="1440" height="837" alt="image" src="https://github.com/user-attachments/assets/8dbc8994-e600-400b-ae0f-ae63698a1593" />
 
 <img width="1440" height="837" alt="image" src="https://github.com/user-attachments/assets/e28ca1f0-8625-4674-bdb8-f95e1d4fd06b" />
-
-<img width="349" height="825" alt="image" src="https://github.com/user-attachments/assets/e1b74a9d-44a1-4cff-9abc-b0f675ad10f5" />
-<img width="512" height="837" alt="image" src="https://github.com/user-attachments/assets/7f6001e4-1f10-4578-bbf2-1e10daf58b54" />
 
 <img width="1008" height="837" alt="image" src="https://github.com/user-attachments/assets/84217272-7a7b-4b44-8479-a85b09792fb1" />
 
