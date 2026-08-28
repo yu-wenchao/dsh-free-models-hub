@@ -1,6 +1,6 @@
 {
     "name":  "dsh-free-models-hub",
-    "version":  "0.3.0",
+    "version":  "0.3.1",
     "description":  "Free models leaderboard for DeepSeek Harness: paginated sidebar panel, one-click custom-provider setup (you only paste your free API key), powered by your own PHP 7.4 + SQLite backend.",
     "type":  "module",
     "main":  "./lib/index.js",

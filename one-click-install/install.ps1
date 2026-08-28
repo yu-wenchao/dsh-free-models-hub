@@ -58,11 +58,23 @@ function Add-JsonArrayItem {
     return $arr
 }
 
+function Copy-PluginToNodeModules {
+    param($Dest)
+    if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
+    Copy-Item -Recurse -Force $PluginSrc $Dest
+    Remove-Item -Recurse -Force (Join-Path $Dest 'node_modules') -ErrorAction SilentlyContinue
+}
+
 function Install-IntoProfile {
     param($ProfileDir)
     $nodeModules = Join-Path $ProfileDir 'node_modules'
     $pkgJsonPath = Join-Path $ProfileDir 'package.json'
-    if (-not (Test-Path $nodeModules)) { return $false }
+    if (-not (Test-Path $nodeModules)) {
+        # 桌面版常把依赖 hoist 到 home 级共享 node_modules，profile 下可能没有自己的 node_modules。
+        # 这里自动创建，避免被静默跳过。
+        New-Item -ItemType Directory -Force -Path $nodeModules | Out-Null
+        Write-Warn "profile 缺少 node_modules，已自动创建: $nodeModules"
+    }
     if (-not (Test-Path $pkgJsonPath)) {
         Write-Warn "profile 缺少 package.json，跳过: $ProfileDir"
         return $false
@@ -71,9 +83,7 @@ function Install-IntoProfile {
     # 1) 复制插件包到 node_modules
     $target = Join-Path $nodeModules $PluginName
     try {
-        if (Test-Path $target) { Remove-Item -Recurse -Force $target }
-        Copy-Item -Recurse -Force $PluginSrc $target
-        Remove-Item -Recurse -Force (Join-Path $target 'node_modules') -ErrorAction SilentlyContinue
+        Copy-PluginToNodeModules -Dest $target
     } catch {
         Write-Err "复制插件包失败: $_"
         return $false
@@ -179,16 +189,26 @@ foreach ($h in $script:homes) { Write-Ok "发现 DSH: $h" }
 $installedAny = $false
 foreach ($h in $script:homes) {
     $profilesRoot = Join-Path $h 'profiles'
-    if (-not (Test-Path $profilesRoot)) { continue }
+    if (-not (Test-Path $profilesRoot)) {
+        Write-Warn "  没有发现 profiles 目录: $profilesRoot"
+        continue
+    }
     Write-Step "处理 DSH ($h) 的 profiles"
-    $profiles = Get-ChildItem $profilesRoot -Directory -ErrorAction SilentlyContinue
+    $profiles = Get-ChildItem $profilesRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'node_modules' }
     if (-not $profiles) { Write-Warn "  没有发现 profile 目录: $profilesRoot" }
     foreach ($p in $profiles) {
-        $nodeModules = Join-Path $p.FullName 'node_modules'
-        if (-not (Test-Path $nodeModules)) { continue }
         Write-Host ("  安装到 profile: " + $p.Name)
         $ok = Install-IntoProfile -ProfileDir $p.FullName
         if ($ok) { $installedAny = $true }
+    }
+    # 兜底：DSH 常把依赖 hoist 到 profiles 级共享 node_modules，所有 profile 都能解析到，补装一份
+    $sharedNm = Join-Path $profilesRoot 'node_modules'
+    if (-not (Test-Path $sharedNm)) { New-Item -ItemType Directory -Force -Path $sharedNm | Out-Null }
+    try {
+        Copy-PluginToNodeModules -Dest (Join-Path $sharedNm $PluginName)
+        Write-Ok "已补装到共享 node_modules: $sharedNm"
+    } catch {
+        Write-Warn ("共享 node_modules 补装失败（可忽略）: " + $_.Exception.Message)
     }
 }
 
