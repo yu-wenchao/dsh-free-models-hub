@@ -67,14 +67,26 @@ https://github.com/yu-wenchao/dsh-free-models-hub/blob/main/one-click-install/RE
 ### 手动 / 命令行安装
 
 ```bash
-# 从 GitHub 源码安装（仓库已含预构建产物，安装不会触发 pnpm allowBuilds 构建许可）
+# ✅ 方式一（推荐·国内直连）：npm 源，无需翻墙
+dsh plugin --profile web add dsh-free-models-hub
+#   指定版本 / 走国内镜像（更稳）：
+dsh plugin --profile web add dsh-free-models-hub@0.3.1 --registry https://registry.npmmirror.com
+
+# 🔁 方式二（备选·开发者）：GitHub 源，需能直连 GitHub
 dsh plugin --profile web add github:yu-wenchao/dsh-free-models-hub
-# 或用本地分发包（one-click-install\plugin\dsh-free-models-hub）：
+#   固定版本：
+dsh plugin --profile web add github:yu-wenchao/dsh-free-models-hub#v0.3.1
+
+# 📦 本地分发包（one-click-install\plugin\dsh-free-models-hub）：
 dsh plugin --profile web add "one-click-install\plugin\dsh-free-models-hub"
 ```
 
-- 桌面版：在 DSH 的 **设置 → 插件中心 / 插件配置** 里添加 `dsh-free-models-hub`。
-- 固定版本：`dsh plugin --profile web add github:yu-wenchao/dsh-free-models-hub#v0.3.1`
+> **两全其美**：npm 源（主，国内直连）与 GitHub 源（备，开发者 / 翻墙）都保留、都有效。
+> 插件市场的「一键安装」默认登记 **npm 源**（`dsh-free-models-hub`），
+> 这样市场里点安装的用户默认走 npm、国内直连即可装上；GitHub 源继续作为高级备选存在。
+
+- 桌面版：在 DSH 的 **设置 → 插件中心 / 插件配置** 里添加 `dsh-free-models-hub`（npm 源）；或填 `github:yu-wenchao/dsh-free-models-hub`（GitHub 源）。
+- 固定版本：`dsh plugin --profile web add dsh-free-models-hub@0.3.1`
 - 更新：再次执行同一条 add 命令即可；卸载：`dsh plugin --profile web remove dsh-free-models-hub`
 
 ## 使用
